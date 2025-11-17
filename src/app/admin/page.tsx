@@ -1,0 +1,489 @@
+'use client';
+
+import React from 'react';
+import { AdminLayout } from '../components/AdminLayout';
+import { StatCard } from '../components/admin/StatCard';
+import { DataTable } from '../components/admin/DataTable';
+import Link from 'next/link';
+import { useModal } from '../components/ModalProvider';
+import { useNotification } from '@/app/components/NotificationProvider';
+import CreateOrderModal from '../components/admin/CreateOrderModal';
+import ConfirmPaymentModal from '../components/admin/ConfirmPaymentModal';
+import SendWhatsAppModal from '../components/admin/SendWhatsAppModal';
+
+// Interfaces
+interface OrderData {
+  serviceType: string;
+  description: string;
+  location: string;
+  urgency: string;
+  estimatedPrice: string;
+  customerPhone: string;
+}
+
+interface Payment {
+  id: string;
+  orderId: string;
+  customer: string;
+  amount: string;
+  paymentMethod: string;
+  paymentDate: string;
+  status: 'pending' | 'confirmed' | 'rejected';
+  proofImage?: string;
+  notes?: string;
+}
+
+interface Customer {
+  id: string;
+  name: string;
+  phone: string;
+  lastOrder?: string;
+  status: 'active' | 'inactive';
+}
+
+interface PaymentData {
+  paymentId: string;
+  action: 'confirm' | 'reject';
+  notes?: string;
+  paymentData: Payment;
+}
+
+interface MessageData {
+  messageType: 'template' | 'custom';
+  templateId?: string;
+  customMessage?: string;
+  customerIds: string[];
+  customerData: Customer[];
+}
+
+// Mock data
+const mockStats = [
+  {
+    title: 'Total Orders',
+    value: '1,234',
+    change: '+12% from last month',
+    changeType: 'positive' as const,
+    icon: (
+      <svg
+        className='w-8 h-8'
+        fill='none'
+        stroke='currentColor'
+        viewBox='0 0 24 24'
+      >
+        <path
+          strokeLinecap='round'
+          strokeLinejoin='round'
+          strokeWidth={2}
+          d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'
+        />
+      </svg>
+    ),
+  },
+  {
+    title: 'Active Users',
+    value: '2,456',
+    change: '+8% from last month',
+    changeType: 'positive' as const,
+    icon: (
+      <svg
+        className='w-8 h-8'
+        fill='none'
+        stroke='currentColor'
+        viewBox='0 0 24 24'
+      >
+        <path
+          strokeLinecap='round'
+          strokeLinejoin='round'
+          strokeWidth={2}
+          d='M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z'
+        />
+      </svg>
+    ),
+  },
+  {
+    title: 'Revenue',
+    value: 'Rp 45.6M',
+    change: '+23% from last month',
+    changeType: 'positive' as const,
+    icon: (
+      <svg
+        className='w-8 h-8'
+        fill='none'
+        stroke='currentColor'
+        viewBox='0 0 24 24'
+      >
+        <path
+          strokeLinecap='round'
+          strokeLinejoin='round'
+          strokeWidth={2}
+          d='M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
+        />
+      </svg>
+    ),
+  },
+  {
+    title: 'Active Tukang',
+    value: '89',
+    change: '+5 from last week',
+    changeType: 'positive' as const,
+    icon: (
+      <svg
+        className='w-8 h-8'
+        fill='none'
+        stroke='currentColor'
+        viewBox='0 0 24 24'
+      >
+        <path
+          strokeLinecap='round'
+          strokeLinejoin='round'
+          strokeWidth={2}
+          d='M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4'
+        />
+      </svg>
+    ),
+  },
+];
+
+const mockRecentOrders = [
+  {
+    id: 'ORD-001',
+    customer: 'John Doe',
+    service: 'Perbaikan Kamar Mandi',
+    status: 'Pending Harga',
+    amount: 'Rp 150,000',
+    date: '2024-01-15',
+    location: 'Jakarta Selatan',
+  },
+  {
+    id: 'ORD-002',
+    customer: 'Jane Smith',
+    service: 'Instalasi AC',
+    status: 'Dikerjakan',
+    amount: 'Rp 500,000',
+    date: '2024-01-15',
+    location: 'Jakarta Pusat',
+  },
+  {
+    id: 'ORD-003',
+    customer: 'Bob Johnson',
+    service: 'Perbaikan Listrik',
+    status: 'Menunggu Pembayaran',
+    amount: 'Rp 200,000',
+    date: '2024-01-14',
+    location: 'Jakarta Barat',
+  },
+  {
+    id: 'ORD-004',
+    customer: 'Alice Brown',
+    service: 'Perbaikan Pintu',
+    status: 'Selesai',
+    amount: 'Rp 300,000',
+    date: '2024-01-14',
+    location: 'Jakarta Utara',
+  },
+  {
+    id: 'ORD-005',
+    customer: 'Charlie Wilson',
+    service: 'Perbaikan Atap',
+    status: 'Masa Tunggu',
+    amount: 'Rp 750,000',
+    date: '2024-01-13',
+    location: 'Jakarta Timur',
+  },
+];
+
+const statusColors = {
+  'Pending Harga': 'bg-yellow-50 text-yellow-700 border border-yellow-200',
+  'Menunggu Pembayaran': 'bg-blue-50 text-blue-700 border border-blue-200',
+  Dikerjakan: 'bg-purple-50 text-purple-700 border border-purple-200',
+  'Masa Tunggu': 'bg-orange-50 text-orange-700 border border-orange-200',
+  Selesai: 'bg-green-50 text-green-700 border border-green-200',
+  Batal: 'bg-red-50 text-red-700 border border-red-200',
+};
+
+// Modal IDs
+const MODAL_IDS = {
+  CREATE_ORDER: 'create-order',
+  CONFIRM_PAYMENT: 'confirm-payment',
+  SEND_WHATSAPP: 'send-whatsapp',
+} as const;
+
+export default function AdminDashboard() {
+  const { openModal, closeModal, isModalOpen } = useModal();
+  const { showSuccess, showError } = useNotification();
+  const recentOrdersColumns = [
+    { key: 'id', label: 'Order ID' },
+    { key: 'customer', label: 'Customer' },
+    { key: 'service', label: 'Service' },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (status: string) => (
+        <span
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap ${
+            statusColors[status as keyof typeof statusColors] ||
+            'bg-gray-50 text-gray-700 border border-gray-200'
+          }`}
+        >
+          {status}
+        </span>
+      ),
+    },
+    { key: 'amount', label: 'Amount' },
+    { key: 'date', label: 'Date' },
+  ];
+
+  const handleCreateOrder = () => {
+    openModal(MODAL_IDS.CREATE_ORDER);
+  };
+
+  const handleConfirmPayment = () => {
+    openModal(MODAL_IDS.CONFIRM_PAYMENT);
+  };
+
+  const handleSendWhatsApp = () => {
+    openModal(MODAL_IDS.SEND_WHATSAPP);
+  };
+
+  const handleCloseModal = () => {
+    closeModal();
+  };
+
+  const handleCreateOrderConfirm = async (orderData: OrderData) => {
+    try {
+      console.log('Creating order:', orderData);
+      // TODO: Implement actual API call to create order
+      showSuccess('Order created and broadcast successfully!', 'Order Created');
+      handleCloseModal();
+    } catch (error) {
+      console.error('Error creating order:', error);
+      showError('Failed to create order. Please try again.', 'Order Creation Failed');
+      throw error;
+    }
+  };
+
+  const handleConfirmPaymentConfirm = async (paymentData: PaymentData) => {
+    try {
+      console.log('Confirming payment:', paymentData);
+      // TODO: Implement actual API call to confirm payment
+      showSuccess('Payment confirmed successfully!', 'Payment Confirmed');
+      handleCloseModal();
+    } catch (error) {
+      console.error('Error confirming payment:', error);
+      showError('Failed to confirm payment. Please try again.', 'Payment Confirmation Failed');
+      throw error;
+    }
+  };
+
+  const handleSendWhatsAppConfirm = async (messageData: MessageData) => {
+    try {
+      console.log('Sending WhatsApp message:', messageData);
+      // TODO: Implement actual API call to send WhatsApp message
+      showSuccess('WhatsApp message sent successfully!', 'Message Sent');
+      handleCloseModal();
+    } catch (error) {
+      console.error('Error sending WhatsApp message:', error);
+      showError('Failed to send WhatsApp message. Please try again.', 'Message Failed');
+      throw error;
+    }
+  };
+
+  return (
+    <AdminLayout>
+      <div className='space-y-8'>
+        {/* Header */}
+        <div className='flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4'>
+          <div>
+            <h1 className='text-sh1b text-[#141414]'>Dashboard Overview</h1>
+            <p className='text-b2 text-[#9E9E9E]'>
+              Welcome back! Here&apos;s what&apos;s happening with your platform
+              today.
+            </p>
+          </div>
+        </div>
+
+        {/* Stats Cards */}
+        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6'>
+          {mockStats.map((stat, index) => (
+            <StatCard
+              key={index}
+              title={stat.title}
+              value={stat.value}
+              change={stat.change}
+              changeType={stat.changeType}
+              icon={stat.icon}
+            />
+          ))}
+        </div>
+
+        {/* Recent Activity */}
+        <div className='grid grid-cols-1 gap-8'>
+          {/* Quick Actions */}
+          <div>
+            <h2 className='text-sh2b text-[#141414] mb-6'>Quick Actions</h2>
+            <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
+              <button
+                onClick={handleCreateOrder}
+                className='w-full h-full bg-white border border-[#D4D4D4] rounded-2xl p-6 text-left hover:bg-[#F5F9FC] transition-colors cursor-pointer'
+              >
+                <div className='flex items-start'>
+                  <div className='w-12 h-12 bg-[#E0F1FE] rounded-xl flex items-center justify-center mr-4 flex-shrink-0'>
+                    <svg
+                      className='w-6 h-6 text-[#0082C9]'
+                      fill='none'
+                      stroke='currentColor'
+                      viewBox='0 0 24 24'
+                    >
+                      <path
+                        strokeLinecap='round'
+                        strokeLinejoin='round'
+                        strokeWidth={2}
+                        d='M12 6v6m0 0v6m0-6h6m-6 0H6'
+                      />
+                    </svg>
+                  </div>
+                  <div className='flex-1 min-w-0'>
+                    <div className='text-b1m text-[#141414] leading-tight mb-1'>
+                      Broadcast New Order
+                    </div>
+                    <div className='text-b3 text-[#9E9E9E] leading-relaxed'>
+                      Send order notification to available tukang
+                    </div>
+                  </div>
+                </div>
+              </button>
+
+              <button
+                onClick={handleConfirmPayment}
+                className='w-full h-full bg-white border border-[#D4D4D4] rounded-2xl p-6 text-left hover:bg-[#F5F9FC] transition-colors cursor-pointer'
+              >
+                <div className='flex items-start'>
+                  <div className='w-12 h-12 bg-[#E0F1FE] rounded-xl flex items-center justify-center mr-4 flex-shrink-0'>
+                    <svg
+                      className='w-6 h-6 text-[#0082C9]'
+                      fill='none'
+                      stroke='currentColor'
+                      viewBox='0 0 24 24'
+                    >
+                      <path
+                        strokeLinecap='round'
+                        strokeLinejoin='round'
+                        strokeWidth={2}
+                        d='M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'
+                      />
+                    </svg>
+                  </div>
+                  <div className='flex-1 min-w-0'>
+                    <div className='text-b1m text-[#141414] leading-tight mb-1'>
+                      Confirm Payment
+                    </div>
+                    <div className='text-b3 text-[#9E9E9E] leading-relaxed'>
+                      Review and confirm customer payments
+                    </div>
+                  </div>
+                </div>
+              </button>
+
+              <button
+                onClick={handleSendWhatsApp}
+                className='w-full h-full bg-white border border-[#D4D4D4] rounded-2xl p-6 text-left hover:bg-[#F5F9FC] transition-colors cursor-pointer'
+              >
+                <div className='flex items-start'>
+                  <div className='w-12 h-12 bg-[#E0F1FE] rounded-xl flex items-center justify-center mr-4 flex-shrink-0'>
+                    <svg
+                      className='w-6 h-6 text-[#0082C9]'
+                      fill='none'
+                      stroke='currentColor'
+                      viewBox='0 0 24 24'
+                    >
+                      <path
+                        strokeLinecap='round'
+                        strokeLinejoin='round'
+                        strokeWidth={2}
+                        d='M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z'
+                      />
+                    </svg>
+                  </div>
+                  <div className='flex-1 min-w-0'>
+                    <div className='text-b1m text-[#141414] leading-tight mb-1'>
+                      Send WhatsApp Message
+                    </div>
+                    <div className='text-b3 text-[#9E9E9E] leading-relaxed'>
+                      Send template messages to customers
+                    </div>
+                  </div>
+                </div>
+              </button>
+            </div>
+          </div>
+          {/* Recent Orders */}
+          <div>
+            <div className='flex items-center justify-between mb-6'>
+              <h2 className='text-sh2b text-[#141414]'>Recent Orders</h2>
+              <Link
+                href='/admin/orders'
+                className='text-b3 text-[#0082C9] font-medium transition-colors duration-150 hover:text-[#0066A3] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0082C9] rounded'
+              >
+                View All
+              </Link>
+            </div>
+            <DataTable
+              columns={recentOrdersColumns}
+              data={mockRecentOrders}
+              onRowClick={(row) => console.log('Row clicked:', row)}
+            />
+          </div>
+
+          {/* System Status */}
+          <div className='bg-white rounded-2xl border border-[#D4D4D4] p-6'>
+            <h2 className='text-sh2b text-[#141414] mb-6'>System Status</h2>
+            <div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
+              <div className='flex items-center'>
+                <div className='w-4 h-4 bg-green-500 rounded-full mr-3'></div>
+                <div>
+                  <div className='text-b2m text-[#141414]'>WhatsApp API</div>
+                  <div className='text-b3 text-[#9E9E9E]'>Operational</div>
+                </div>
+              </div>
+              <div className='flex items-center'>
+                <div className='w-4 h-4 bg-green-500 rounded-full mr-3'></div>
+                <div>
+                  <div className='text-b2m text-[#141414]'>Database</div>
+                  <div className='text-b3 text-[#9E9E9E]'>Operational</div>
+                </div>
+              </div>
+              <div className='flex items-center'>
+                <div className='w-4 h-4 bg-yellow-500 rounded-full mr-3'></div>
+                <div>
+                  <div className='text-b2m text-[#141414]'>File Storage</div>
+                  <div className='text-b3 text-[#9E9E9E]'>
+                    Maintenance in progress
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Modals */}
+      <CreateOrderModal
+        isOpen={isModalOpen(MODAL_IDS.CREATE_ORDER)}
+        onClose={handleCloseModal}
+        onConfirm={handleCreateOrderConfirm}
+      />
+
+      <ConfirmPaymentModal
+        isOpen={isModalOpen(MODAL_IDS.CONFIRM_PAYMENT)}
+        onClose={handleCloseModal}
+        onConfirm={handleConfirmPaymentConfirm}
+      />
+
+      <SendWhatsAppModal
+        isOpen={isModalOpen(MODAL_IDS.SEND_WHATSAPP)}
+        onClose={handleCloseModal}
+        onConfirm={handleSendWhatsAppConfirm}
+      />
+    </AdminLayout>
+  );
+}

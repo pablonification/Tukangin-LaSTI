@@ -1,0 +1,111 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  WARRANTY
+  COMPLETED
+  CANCELLED
+}
+
+enum DiscountType {
+  PERCENT
+  FLAT
+}
+
+enum UserRole {
+  CUSTOMER
+  DEVELOPER
+  ADMIN
+}
+
+model Users {
+  id       String   @id @default(uuid())
+  email    String   @unique
+  name     String
+  role     UserRole @default(CUSTOMER)
+  image    String?
+  isNew    Boolean  @default(true)
+  isActive Boolean  @default(true)
+  phone    String?
+  joinedAt DateTime @default(now())
+  address  String?
+
+  // Relations
+  suspensions  Suspensions[]
+  orders       Orders[]
+  professional Professionals?
+}
+
+model Suspensions {
+  id        String    @id @default(uuid())
+  userId    String
+  reason    String
+  until     DateTime?
+  createdAt DateTime  @default(now())
+
+  // Relations
+  user Users @relation(fields: [userId], references: [id])
+}
+
+model Orders {
+  id             String      @id @default(uuid())
+  receiverName   String
+  receiverPhone  String
+  category       String
+  service        String
+  address        String
+  description    String
+  status         OrderStatus @default(PENDING)
+  createdAt      DateTime    @default(now())
+  paidAt         DateTime?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  subtotal       Int?
+  discount       Int?
+  total          Int?
+  userId         String
+  voucherId      Int?
+  professionalId String?
+  rating         Decimal?
+
+  // Relations
+  user         Users          @relation(fields: [userId], references: [id])
+  voucher      Vouchers?      @relation(fields: [voucherId], references: [id])
+  professional Professionals? @relation(fields: [professionalId], references: [userId])
+  attachments  String[]
+}
+
+model Professionals {
+  userId        String   @id
+  speciality    String?
+  alamat        String
+  nikNumber     String   @unique
+  idCardPicture String
+  joined_at     DateTime @default(now())
+
+  // Relations
+  user   Users    @relation(fields: [userId], references: [id])
+  orders Orders[]
+}
+
+model Vouchers {
+  id          Int          @id @default(autoincrement())
+  code        String       @unique
+  type        DiscountType
+  value       Decimal
+  maxDiscount Decimal
+  expiryDate  DateTime?
+  usageLimit  Int?
+  isActive    Boolean
+
+  // Relations
+  orders Orders[]
+}
