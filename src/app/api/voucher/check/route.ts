@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
 import { unstable_cache } from 'next/cache';
-import { prisma } from '@/lib/prisma';
+import { getSupabaseServer } from '@/lib/supabaseServer';
 import { z } from 'zod';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 
 const CheckVoucherRequest = z.object({
   code: z.string().min(1, { message: 'Voucher code is required' }),
@@ -11,21 +9,34 @@ const CheckVoucherRequest = z.object({
 
 export async function POST(req: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const supabase = await getSupabaseServer();
+
+    // Get authenticated user
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
       return NextResponse.json(
         { valid: false, message: 'Unauthorized' },
         { status: 401 },
       );
     }
-    const userId = Number(session.user.id);
 
     const body = await req.json();
     const { code } = CheckVoucherRequest.parse(body);
 
     const getVoucherByCode = unstable_cache(
       async () => {
-        return prisma.voucher.findUnique({ where: { code } });
+        const { data, error } = await supabase
+          .from('vouchers')
+          .select('*')
+          .eq('code', code)
+          .single();
+
+        if (error) throw error;
+        return data;
       },
       [`voucher-${code}`],
       { revalidate: 300, tags: ['voucher:all', `voucher:${code}`] },
@@ -47,7 +58,7 @@ export async function POST(req: Request) {
       );
     }
 
-    if (voucher.expiry_date && voucher.expiry_date < new Date()) {
+    if (voucher.expiry_date && new Date(voucher.expiry_date) < new Date()) {
       return NextResponse.json(
         { valid: false, message: 'Voucher has expired' },
         { status: 400 },
@@ -62,10 +73,13 @@ export async function POST(req: Request) {
     }
 
     if (voucher.user_limit) {
-      const userUsageCount = await prisma.order.count({
-        where: { userId, voucherId: voucher.id },
-      });
-      if (userUsageCount >= voucher.user_limit) {
+      const { count: userUsageCount, error: countError } = await supabase
+        .from('orders')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('voucher_id', voucher.id);
+
+      if (countError || (userUsageCount !== null && userUsageCount >= voucher.user_limit)) {
         return NextResponse.json(
           {
             valid: false,
@@ -79,8 +93,8 @@ export async function POST(req: Request) {
     return NextResponse.json({
       valid: true,
       code: voucher.code,
-      discount_type: voucher.discount_type,
-      discount_value: voucher.discount_value,
+      discount_type: voucher.type,
+      discount_value: voucher.value,
       max_discount: voucher.max_discount,
     });
   } catch (err) {

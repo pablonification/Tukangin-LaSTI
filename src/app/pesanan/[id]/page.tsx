@@ -2,11 +2,9 @@ import Image from 'next/image';
 import { TopBar } from '@/app/components/TopBar';
 import Button from '@/app/components/Button';
 import Link from 'next/link';
-import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getSupabaseServer } from '@/lib/supabaseServer';
 import { BaseCanvas } from '@/app/components/BaseCanvas';
-import { services } from '@/lib/data';
+import { services, ServiceItem } from '@/lib/data';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -63,7 +61,7 @@ const toTitleFromSlug = (value: string) =>
     .join(' ');
 
 const getServiceMeta = (key: string) => {
-  const svc = services.find((s) => s.slug === key || s.name === key);
+  const svc = services.find((s: ServiceItem) => s.slug === key || s.name === key);
   const slug = svc?.slug ?? key;
   const name = svc?.name ?? toTitleFromSlug(key);
   const icon = iconBySlug[slug] ?? '/layanan-umum.svg';
@@ -72,22 +70,32 @@ const getServiceMeta = (key: string) => {
 
 const Page = async ({ params }: PageProps) => {
   const { id } = await params;
-  const session = await getServerSession(authOptions);
-  const order = await prisma.orders.findUnique({
-    where: {
-      id: id,
-      userId: session?.user.id, // validasi langsung di query
-    },
-    include: {
-      professional: {
-        include: {
-          _count: {
-            select: { orders: true },
-          },
-        },
-      },
-    },
-  });
+  const supabase = await getSupabaseServer();
+  
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return (
+      <BaseCanvas centerContent={true} padding='px-6'>
+        <p className='text-center'>Tidak terautentikasi.</p>
+      </BaseCanvas>
+    );
+  }
+
+  const { data: order } = await supabase
+    .from('orders')
+    .select(`
+      *,
+      professional:professionals(
+        user_id,
+        orders:orders(count)
+      )
+    `)
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .single();
 
   if (!order) {
     return (
@@ -130,7 +138,7 @@ const Page = async ({ params }: PageProps) => {
               })()}
             </div>
             <div className='text-b3 text-[#7D7D7D]'>
-              {formatDate(order.createdAt.toISOString())}
+              {formatDate(order.created_at)}
             </div>
           </div>
 
@@ -161,10 +169,10 @@ const Page = async ({ params }: PageProps) => {
             <div className='h-14 w-14 rounded-xl bg-[#D9D9D9]' />
             <div className='flex-1 flex flex-col justify-between h-12'>
               <div className='text-sh3 text-[#141414]'>
-                {order.professional?.userId} Anies Baswedan
+                {order.professional?.user_id} Anies Baswedan
               </div>
               <div className='flex items-center gap-2 text-b2 text-[#7D7D7D]'>
-                <span>{order.professional?._count.orders}200+ panggilan</span>
+                <span>{order.professional?.orders?.[0]?.count || 0}200+ panggilan</span>
                 <Image src='/star.svg' alt='' width={16} height={16} />
                 <span>4.9</span>
               </div>
@@ -194,7 +202,7 @@ const Page = async ({ params }: PageProps) => {
                 />
                 <div>
                   <div className='text-b3 text-[#7D7D7D]'>
-                    {formatDate(order.createdAt.toISOString())}
+                    {formatDate(order.created_at)}
                   </div>
                   <div className='text-b2m text-[#141414]'>{text}</div>
                 </div>

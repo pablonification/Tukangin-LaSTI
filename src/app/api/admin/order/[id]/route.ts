@@ -1,11 +1,9 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
+import { getSupabaseServer } from '@/lib/supabaseServer';
 import { z, ZodError } from 'zod';
 
 const DeleteOrderSchema = z.object({
-  id: z.string().regex(/^\d+$/, 'Invalid order id'),
+  id: z.string().regex(/^[0-9a-fA-F-]+$/, 'Invalid order id'),
 });
 
 export async function DELETE(
@@ -13,18 +11,40 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const supabase = await getSupabaseServer();
 
-    if (!session?.user?.id || session.user.role === 'CUSTOMER') {
+    // Get authenticated user
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Check user role
+    const { data: appUser, error: userError } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (userError || !appUser || appUser.role === 'CUSTOMER') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const resolvedParams = await params;
     const data = DeleteOrderSchema.parse(resolvedParams);
 
-    const deleted = await prisma.order.delete({
-      where: { id: Number(data.id) },
-    });
+    const { data: deleted, error } = await supabase
+      .from('orders')
+      .delete()
+      .eq('id', data.id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
 
     return NextResponse.json(
       { message: 'Order deleted', order: deleted },

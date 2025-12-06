@@ -5,14 +5,14 @@ import { useEffect, useState } from 'react';
 import { BottomNav } from '@/app/components/BottomNav';
 import { BaseCanvas } from '@/app/components/BaseCanvas';
 import Image from 'next/image';
-import { services } from '@/lib/data';
+import { services, ServiceItem } from '@/lib/data';
 
 interface OrderItem {
   id: string;
   service: string;
   status: string;
-  total: number;
-  createdAt: string;
+  total: number | null;
+  created_at: string;
 }
 
 const formatIDR = (v: number) =>
@@ -22,8 +22,10 @@ const formatIDR = (v: number) =>
     maximumFractionDigits: 0,
   }).format(v);
 
-const formatDate = (iso: string) => {
+const formatDate = (iso: string | null | undefined) => {
+  if (!iso) return '-';
   const date = new Date(iso);
+  if (isNaN(date.getTime())) return '-';
   return new Intl.DateTimeFormat('id-ID', {
     day: '2-digit',
     month: 'short',
@@ -51,7 +53,7 @@ const toTitleFromSlug = (value: string) =>
     .join(' ');
 
 const getServiceMeta = (key: string) => {
-  const svc = services.find((s) => s.slug === key || s.name === key);
+  const svc = services.find((s: ServiceItem) => s.slug === key || s.name === key);
   const slug = svc?.slug ?? key;
   const name = svc?.name ?? toTitleFromSlug(key);
   const icon = iconBySlug[slug] ?? '/layanan-umum.svg';
@@ -151,7 +153,7 @@ const PesananPage = () => {
             {items.map((item) => (
               <li key={item.id} className='py-3'>
                 <div className='text-b3 text-[#7D7D7D] mb-2'>
-                  {formatDate(item.createdAt)}
+                  {formatDate(item.created_at)}
                 </div>
                 <Link
                   href={`/pesanan/${item.id}`}
@@ -180,7 +182,7 @@ const PesananPage = () => {
                     })()}
                   </div>
                   <div className='text-b2m text-[#7D7D7D]'>
-                    {formatIDR(item.total)}
+                    {item.total ? formatIDR(item.total) : '-'}
                   </div>
                 </Link>
               </li>

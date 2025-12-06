@@ -7,11 +7,14 @@ interface BottomNavProps {
 
 export const BottomNav = ({ active = 'home' }: BottomNavProps) => {
   const base =
-    'flex flex-col items-center justify-center text-b3';
+    'flex flex-col items-center justify-center text-b3 transition-colors active:scale-95';
   return (
     <nav
       aria-label='Navigasi bawah'
-      className='fixed left-0 right-0 bottom-0 bg-white border-t border-gray-200 z-50'
+      className='fixed left-0 right-0 bottom-0 bg-white border-t border-gray-200 z-50 safe-area-bottom'
+      style={{
+        paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))'
+      }}
     >
       <div className='mx-auto w-full max-w-full px-4'>
         <div className='grid grid-cols-3 h-16'>
@@ -28,7 +31,7 @@ export const BottomNav = ({ active = 'home' }: BottomNavProps) => {
               className='h-6 w-6'
               aria-hidden='true'
             />
-            <span>Home</span>
+            <span className='mt-1'>Home</span>
           </Link>
           <Link
             href='/pesanan'
@@ -43,7 +46,7 @@ export const BottomNav = ({ active = 'home' }: BottomNavProps) => {
               className='h-6 w-6'
               aria-hidden='true'
             />
-            <span>Pesanan</span>
+            <span className='mt-1'>Pesanan</span>
           </Link>
           <Link
             href='/profile'
@@ -58,7 +61,7 @@ export const BottomNav = ({ active = 'home' }: BottomNavProps) => {
               className='h-6 w-6'
               aria-hidden='true'
             />
-            <span>Profil</span>
+            <span className='mt-1'>Profil</span>
           </Link>
         </div>
       </div>

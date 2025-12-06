@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
 import { unstable_cache, revalidateTag } from 'next/cache';
-import { prisma } from '@/lib/prisma';
+import { getSupabaseServer } from '@/lib/supabaseServer';
 import { z, ZodError } from 'zod';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
 
 const CreateOrderSchema = z.object({
   receiverName: z.string().min(1, { message: 'Receiver name is required' }),
@@ -17,9 +15,15 @@ const CreateOrderSchema = z.object({
 
 export async function POST(req: Request) {
   try {
-    const session = await getServerSession(authOptions);
+    const supabase = await getSupabaseServer();
 
-    if (!session?.user?.id) {
+    // Get authenticated user
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -28,54 +32,60 @@ export async function POST(req: Request) {
 
     let voucher = null;
     if (data.voucherCode) {
-      voucher = await prisma.vouchers.findUnique({
-        where: { code: data.voucherCode },
-      });
+      const { data: voucherRow, error: voucherError } = await supabase
+        .from('vouchers')
+        .select('*')
+        .eq('code', data.voucherCode)
+        .single();
 
       if (
-        !voucher ||
-        !voucher.isActive ||
-        (voucher.expiryDate && voucher.expiryDate < new Date()) ||
-        voucher.usageLimit !== null // &&
-        //      voucher.>= voucher.usage_limit) //fix later
+        voucherError ||
+        !voucherRow ||
+        !voucherRow.is_active ||
+        (voucherRow.expiry_date && new Date(voucherRow.expiry_date) < new Date())
       ) {
         return NextResponse.json({ error: 'Voucher invalid' }, { status: 400 });
       }
 
-      if (voucher.usageLimit !== null) {
-        const userUsageCount = await prisma.orders.count({
-          where: {
-            userId: session.user.id,
-            voucherId: voucher.id,
-          },
-        });
+      if (voucherRow.usage_limit !== null) {
+        const { count, error: countError } = await supabase
+          .from('orders')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('voucher_id', voucherRow.id);
 
-        if (userUsageCount >= voucher.usageLimit) {
+        if (countError || (count !== null && count >= voucherRow.usage_limit)) {
           return NextResponse.json(
             { error: 'Voucher invalid' },
             { status: 400 },
           );
         }
       }
+
+      voucher = voucherRow;
     }
 
-    const order = await prisma.orders.create({
-      data: {
-        receiverName: data.receiverName,
+    const { data: order, error: orderError } = await supabase
+      .from('orders')
+      .insert({
+        receiver_name: data.receiverName,
+        receiver_phone: data.receiverPhone,
         service: data.service,
         category: '',
         address: data.address,
         description: data.description,
-        userId: session.user.id,
-        voucherId: voucher ? voucher.id : null,
-        receiverPhone: '',
+        user_id: user.id,
+        voucher_id: voucher ? voucher.id : null,
         attachments: data.attachments ? data.attachments : [],
-      },
-    });
+      })
+      .select('*')
+      .single();
+
+    if (orderError) throw orderError;
 
     // Invalidate cached lists for this user and admin views
     try {
-      revalidateTag(`orders:user:${Number(session.user.id)}`);
+      revalidateTag(`orders:user:${user.id}`);
       revalidateTag('orders:all');
       // Voucher usage might have changed
       revalidateTag('voucher:all');
@@ -98,22 +108,31 @@ export async function POST(req: Request) {
 
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const supabase = await getSupabaseServer();
+
+    // Get authenticated user
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const userId = session.user.id;
-
     const getUserOrders = unstable_cache(
       async () => {
-        return prisma.orders.findMany({
-          where: { userId },
-          orderBy: { createdAt: 'desc' },
-        });
+        const { data, error } = await supabase
+          .from('orders')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return data;
       },
-      [`orders-user-${userId}`],
-      { revalidate: 60, tags: [`orders:user:${userId}`] },
+      [`orders-user-${user.id}`],
+      { revalidate: 60, tags: [`orders:user:${user.id}`] },
     );
 
     const orders = await getUserOrders();

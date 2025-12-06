@@ -9,7 +9,7 @@ import React, {
 } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { getSupabaseBrowser } from '@/lib/supabase';
 import { useNotification } from '@/app/components/NotificationProvider';
 import { TopBar } from '@/app/components/TopBar';
 import { BaseCanvas } from '@/app/components/BaseCanvas';
@@ -17,12 +17,13 @@ import Button from '@/app/components/Button';
 
 const EditProfilePage = () => {
   const router = useRouter();
-  const { data: session, status } = useSession();
+  const supabase = getSupabaseBrowser();
   const { showError, showSuccess } = useNotification();
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
+  const [image, setImage] = useState('');
   const [predictions, setPredictions] = useState<
     google.maps.places.AutocompletePrediction[]
   >([]);
@@ -31,16 +32,24 @@ const EditProfilePage = () => {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (status !== 'authenticated') return;
-    fetch('/api/users')
-      .then((res) => res.json())
-      .then((data) => {
-        setName(data.name || '');
-        setPhone((data.phone || '').replace(/^\+62/, ''));
-        setAddress(data.address || '');
-      })
-      .catch(() => showError('Gagal memuat data profil'));
-  }, [status, showError]);
+    const loadUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      fetch('/api/users')
+        .then((res) => res.json())
+        .then((data) => {
+          setName(data.name || '');
+          setPhone((data.phone || '').replace(/^\+62/, ''));
+          setAddress(data.address || '');
+          setImage(data.image || '');
+        })
+        .catch(() => showError('Gagal memuat data profil'));
+    };
+    loadUser();
+  }, [supabase, showError]);
 
   const handleClear = (setter: Dispatch<SetStateAction<string>>) => () =>
     setter('');
@@ -62,7 +71,7 @@ const EditProfilePage = () => {
 
     if (window.google && window.google.maps && val.length > 2) {
       const service = new google.maps.places.AutocompleteService();
-      service.getPlacePredictions({ input: val }, (preds) => {
+      service.getPlacePredictions({ input: val }, (preds: google.maps.places.AutocompletePrediction[] | null) => {
         setPredictions(preds || []);
       });
     } else {
@@ -76,7 +85,7 @@ const EditProfilePage = () => {
     const service = new google.maps.places.PlacesService(
       document.createElement('div'),
     );
-    service.getDetails({ placeId: p.place_id }, (place, status) => {
+    service.getDetails({ placeId: p.place_id }, (place: google.maps.places.PlaceResult | null, status: google.maps.places.PlacesServiceStatus) => {
       if (status === google.maps.places.PlacesServiceStatus.OK && place) {
         const formatted = place.formatted_address ?? p.description;
         setAddress(formatted);
@@ -115,9 +124,9 @@ const EditProfilePage = () => {
       <div className='w-full px-6 py-6 flex flex-col gap-4'>
         <div className='flex justify-center'>
           <div className='h-24 w-24 rounded-full bg-[#EEEEEE] overflow-hidden grid place-items-center'>
-            {session?.user?.image ? (
+            {image ? (
               <Image
-                src={session.user.image}
+                src={image}
                 alt='Foto profil'
                 width={96}
                 height={96}

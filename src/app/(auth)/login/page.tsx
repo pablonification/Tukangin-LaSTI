@@ -4,9 +4,32 @@ import { useState } from "react";
 import { BaseCanvas } from "../../components/BaseCanvas";
 import { TopBar } from "../../components/TopBar";
 import Button from "../../components/Button";
+import { getSupabaseBrowser } from "@/lib/supabase";
 
 const LoginPage = () => {
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const supabase = getSupabaseBrowser();
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/welcome`,
+        },
+      });
+      if (error) throw error;
+    } catch (err: unknown) {
+      console.error('Login error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to login';
+      setError(errorMessage);
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = () => {
     if (phoneNumber.trim()) {
@@ -32,6 +55,29 @@ const LoginPage = () => {
       <p className="text-b2 text-center text-black mb-8 leading-tight max-w-xs">
         Masuk atau daftar menggunakan nomor teleponmu untuk memulai
       </p>
+
+      {/* Error Message */}
+      {error && (
+        <div className="w-full max-w-sm mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+          {error}
+        </div>
+      )}
+
+      {/* Google Login Button */}
+      <div className="w-full max-w-sm mb-4">
+        <Button 
+          variant="primary" 
+          size="lg" 
+          onClick={handleGoogleLogin}
+          disabled={loading}
+        >
+          {loading ? 'Loading...' : 'Masuk dengan Google'}
+        </Button>
+      </div>
+
+      <div className="w-full max-w-sm mb-4 text-center text-gray-500">
+        atau
+      </div>
       
       {/* Phone Number Input */}
       <div className="w-full max-w-sm mb-8">

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useSession } from 'next-auth/react';
+import { getSupabaseBrowser } from '@/lib/supabase';
 import { useNotification } from '@/app/components/NotificationProvider';
 import { BaseCanvas } from '../../../components/BaseCanvas';
 
@@ -11,7 +11,7 @@ interface FormPageProps {
 
 export default function FormPage({ svc }: FormPageProps) {
   const [loading, setLoading] = useState(false);
-  const { data: session } = useSession(); // ambil session
+  const supabase = getSupabaseBrowser();
   const { showError } = useNotification();
 
   return (
@@ -30,6 +30,10 @@ export default function FormPage({ svc }: FormPageProps) {
           const catatan = formData.get('catatan') as string;
 
           try {
+            const {
+              data: { user },
+            } = await supabase.auth.getUser();
+
             const res = await fetch('/api/order', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -37,7 +41,7 @@ export default function FormPage({ svc }: FormPageProps) {
                 service: svc.slug,
                 address: alamat,
                 description: catatan,
-                userId: session?.user?.id,
+                userId: user?.id,
               }),
             });
 

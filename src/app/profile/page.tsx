@@ -5,7 +5,7 @@ import type { Metadata } from 'next';
 import { BottomNav } from '@/app/components/BottomNav';
 import { BaseCanvas } from '@/app/components/BaseCanvas';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import LogoutButton from '../components/LogoutButton';
 
 export const metadata: Metadata = {

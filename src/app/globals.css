@@ -18,11 +18,46 @@
   }
 }
 
+* {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-manrope), ui-sans-serif, system-ui, -apple-system,
     Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  overscroll-behavior-y: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* PWA Safe Areas for iOS notch/dynamic island */
+@supports (padding: max(0px)) {
+  body {
+    padding-left: max(0px, env(safe-area-inset-left));
+    padding-right: max(0px, env(safe-area-inset-right));
+  }
+}
+
+/* Ensure buttons and interactive elements are touch-friendly */
+button, a, [role="button"] {
+  min-height: 44px;
+  min-width: 44px;
+  touch-action: manipulation;
+}
+
+/* Prevent text selection on interactive elements */
+button, a, [role="button"], nav {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Allow text selection in content areas */
+p, span, div:not([role]) {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* H1 32/44 */

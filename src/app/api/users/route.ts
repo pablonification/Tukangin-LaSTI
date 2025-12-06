@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
 import { revalidateTag, unstable_cache } from 'next/cache';
-import { prisma } from '@/lib/prisma';
+import { getSupabaseServer } from '@/lib/supabaseServer';
 import { z } from 'zod';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
 
 type UserUpdateData = {
   name: string;
@@ -23,8 +21,15 @@ const UpdateUserRequest = z.object({
 // PATCH: update nama user sendiri
 export async function PATCH(req: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const supabase = await getSupabaseServer();
+
+    // Get authenticated user
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -37,13 +42,17 @@ export async function PATCH(req: Request) {
     if (address !== undefined) updateData.address = address;
     if (phone !== undefined) updateData.phone = phone;
 
-    const updatedUser = await prisma.users.update({
-      where: { id: session.user.id },
-      data: updateData,
-    });
+    const { data: updatedUser, error } = await supabase
+      .from('users')
+      .update(updateData)
+      .eq('id', user.id)
+      .select('id, name, email, phone, address')
+      .single();
+
+    if (error) throw error;
 
     try {
-      revalidateTag(`user:${Number(session.user.id)}`);
+      revalidateTag(`user:${user.id}`);
     } catch {}
 
     return NextResponse.json(updatedUser, { status: 200 });
@@ -66,37 +75,41 @@ export async function PATCH(req: Request) {
 // GET: ambil data user sendiri
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
-    const userId = session?.user.id;
-    if (!userId) {
+    const supabase = await getSupabaseServer();
+
+    // Get authenticated user
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const getUser = unstable_cache(
       async () => {
-        return prisma.users.findUnique({
-          where: { id: userId },
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-            address: true,
-          },
-        });
+        const { data, error } = await supabase
+          .from('users')
+          .select('id, name, email, phone, address')
+          .eq('id', user.id)
+          .single();
+
+        if (error) throw error;
+        return data;
       },
-      [`user-${userId}`],
-      { revalidate: 120, tags: [`user:${userId}`] },
+      [`user-${user.id}`],
+      { revalidate: 120, tags: [`user:${user.id}`] },
     );
 
-    const user = await getUser();
-    console.log(user);
+    const profile = await getUser();
+    console.log(profile);
 
-    if (!user) {
+    if (!profile) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    return NextResponse.json(user, { status: 200 });
+    return NextResponse.json(profile, { status: 200 });
   } catch (err) {
     console.error(err);
     return NextResponse.json(

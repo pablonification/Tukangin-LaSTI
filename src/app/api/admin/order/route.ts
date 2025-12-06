@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server';
 import { unstable_cache, revalidateTag } from 'next/cache';
-import { prisma } from '@/lib/prisma';
+import { getSupabaseServer } from '@/lib/supabaseServer';
 import { z, ZodError } from 'zod';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
 
 const UpsertOrderRequest = z.object({
-  id: z.number().optional(),
+  id: z.string().optional(),
   receiverName: z.string().min(1),
   service: z.string().min(1),
   address: z.string().min(1),
@@ -19,56 +17,83 @@ const UpsertOrderRequest = z.object({
     'WARRANTY',
     'CANCELLED',
   ]),
-  voucherId: z.number().optional(),
-  tukangId: z.number().optional(),
+  voucherId: z.string().optional(),
+  tukangId: z.string().optional(),
   attachment: z.array(z.string()).optional(),
   receiverPhone: z.string().min(1),
 });
 
 export async function POST(req: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role === 'CUSTOMER') {
+    const supabase = await getSupabaseServer();
+
+    // Get authenticated user
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Check user role
+    const { data: appUser, error: userError } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (userError || !appUser || appUser.role === 'CUSTOMER') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const json = await req.json();
     const data = UpsertOrderRequest.parse(json);
 
-    // kalau update, ambil dulu order lama
+    // If update, fetch existing order
     let existingOrder = null;
     if (data.id) {
-      existingOrder = await prisma.order.findUnique({
-        where: { id: data.id },
-        include: { Voucher: true },
-      });
-      if (!existingOrder) {
+      const { data: order, error: orderError } = await supabase
+        .from('orders')
+        .select('*, voucher:vouchers(*)')
+        .eq('id', data.id)
+        .single();
+
+      if (orderError || !order) {
         return NextResponse.json({ error: 'Order not found' }, { status: 404 });
       }
+      existingOrder = order;
     }
 
-    // tentukan voucher yang dipakai (baru dari request atau lama)
-    const voucherId = data.voucherId ?? existingOrder?.voucherId ?? null;
+    // Determine voucher to use
+    const voucherId = data.voucherId ?? existingOrder?.voucher_id ?? null;
     let discount = 0;
 
     if (voucherId) {
-      const voucher = await prisma.voucher.findUnique({
-        where: { id: voucherId },
-      });
+      const { data: voucher, error: voucherError } = await supabase
+        .from('vouchers')
+        .select('*')
+        .eq('id', voucherId)
+        .single();
+
       if (
+        voucherError ||
         !voucher ||
         !voucher.is_active ||
-        (voucher.expiry_date && voucher.expiry_date < new Date())
+        (voucher.expiry_date && new Date(voucher.expiry_date) < new Date())
       ) {
         return NextResponse.json(
           { error: 'Voucher not valid' },
           { status: 400 },
         );
       }
+
       discount =
-        voucher.discount_type === 'PERCENT'
-          ? Math.floor(data.subtotal * (Number(voucher.discount_value) / 100))
-          : Math.floor(Number(voucher.discount_value));
+        voucher.type === 'PERCENT'
+          ? Math.floor(data.subtotal * (Number(voucher.value) / 100))
+          : Math.floor(Number(voucher.value));
+
       if (voucher.max_discount) {
         discount = Math.min(discount, Number(voucher.max_discount));
       }
@@ -77,18 +102,19 @@ export async function POST(req: Request) {
     const subtotal = Math.floor(data.subtotal);
     const total = subtotal - discount;
 
-    // derive completedAt & warrantyUntil
-    let completedAt: Date | null = null;
-    let warrantyUntil: Date | null = null;
-    if (data.status === 'COMPLETED') completedAt = new Date();
+    // Derive completedAt & warrantyUntil
+    let completedAt: string | null = null;
+    let warrantyUntil: string | null = null;
+    if (data.status === 'COMPLETED') completedAt = new Date().toISOString();
     if (data.status === 'WARRANTY') {
       const now = new Date();
-      warrantyUntil = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+      warrantyUntil = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString();
     }
 
-    // prepare data untuk create/update
-    const orderData = {
-      receiverName: data.receiverName,
+    // Prepare data for create/update
+    const orderData: Record<string, unknown> = {
+      receiver_name: data.receiverName,
+      receiver_phone: data.receiverPhone,
       service: data.service,
       address: data.address,
       description: data.description,
@@ -96,37 +122,41 @@ export async function POST(req: Request) {
       subtotal,
       discount,
       total,
-      ...(completedAt && { completedAt }),
-      ...(warrantyUntil && { warrantyUntil }),
-      voucherId,
-      userId: existingOrder?.userId ?? Number(session.user.id),
-      tukangId: data.tukangId ?? null,
-      attachments: data.attachment,
-      receiverPhone: data.receiverPhone,
+      voucher_id: voucherId,
+      professional_id: data.tukangId ?? null,
+      attachments: data.attachment ?? [],
     };
+
+    if (completedAt) orderData.completed_at = completedAt;
+    if (warrantyUntil) orderData.warranty_until = warrantyUntil;
 
     let order;
     if (data.id) {
-      order = await prisma.order.update({
-        where: { id: data.id },
-        data: orderData,
-      });
-    } else {
-      order = await prisma.order.create({ data: orderData });
-    }
+      const { data: updated, error: updateError } = await supabase
+        .from('orders')
+        .update(orderData)
+        .eq('id', data.id)
+        .select('*')
+        .single();
 
-    // update used_count voucher kalau baru dipakai
-    if (voucherId && (!data.id || existingOrder?.voucherId !== voucherId)) {
-      await prisma.voucher.update({
-        where: { id: voucherId },
-        data: { used_count: { increment: 1 } },
-      });
+      if (updateError) throw updateError;
+      order = updated;
+    } else {
+      orderData.user_id = user.id;
+      const { data: created, error: createError } = await supabase
+        .from('orders')
+        .insert(orderData)
+        .select('*')
+        .single();
+
+      if (createError) throw createError;
+      order = created;
     }
 
     try {
       // Invalidate relevant caches
       revalidateTag('orders:all');
-      revalidateTag(`orders:user:${order.userId}`);
+      revalidateTag(`orders:user:${order.user_id}`);
       if (voucherId) revalidateTag('voucher:all');
     } catch {}
 
@@ -148,18 +178,38 @@ export async function POST(req: Request) {
 
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
+    const supabase = await getSupabaseServer();
 
-    if (!session?.user?.id || session.user.role === 'CUSTOMER') {
+    // Get authenticated user
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Check user role
+    const { data: appUser, error: userError } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (userError || !appUser || appUser.role === 'CUSTOMER') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const getAdminOrders = unstable_cache(
       async () => {
-        return prisma.order.findMany({
-          include: { User: true },
-          orderBy: { createdAt: 'desc' },
-        });
+        const { data, error } = await supabase
+          .from('orders')
+          .select('*, user:users(*)')
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return data;
       },
       ['orders-admin-all'],
       { revalidate: 30, tags: ['orders:all'] },

@@ -3,12 +3,12 @@ import { useState, useEffect, useRef } from 'react';
 import { TopBar } from '../../../components/TopBar';
 import Button from '../../../components/Button';
 import { StickyActions } from '../../../components/StickyActions';
-import { useSession } from 'next-auth/react';
+import { getSupabaseBrowser } from '@/lib/supabase';
 import { useNotification } from '@/app/components/NotificationProvider';
 import { BaseCanvas } from '../../../components/BaseCanvas';
 
 const NamePage = () => {
-  const { data: session, status } = useSession();
+  const supabase = getSupabaseBrowser();
   const { showError } = useNotification();
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
@@ -21,19 +21,24 @@ const NamePage = () => {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (status !== 'authenticated') return;
-    if (!session?.user?.id) return;
+    const loadUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
 
-    setLoading(true);
-    fetch(`/api/users`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data?.name) setFullName(data.name);
-        if (data?.phone) setPhone(data.phone);
-        if (data?.address) setAddress(data.address);
-      })
-      .finally(() => setLoading(false));
-  }, [status, session?.user?.id]);
+      setLoading(true);
+      fetch(`/api/users`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data?.name) setFullName(data.name);
+          if (data?.phone) setPhone(data.phone);
+          if (data?.address) setAddress(data.address);
+        })
+        .finally(() => setLoading(false));
+    };
+    loadUser();
+  }, [supabase]);
 
   // autocomplete
   const handleAddressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -42,7 +47,7 @@ const NamePage = () => {
 
     if (window.google && window.google.maps && val.length > 2) {
       const service = new google.maps.places.AutocompleteService();
-      service.getPlacePredictions({ input: val }, (preds) => {
+      service.getPlacePredictions({ input: val }, (preds: google.maps.places.AutocompletePrediction[] | null) => {
         setPredictions(preds || []);
       });
     } else {
@@ -56,7 +61,7 @@ const NamePage = () => {
     const service = new google.maps.places.PlacesService(
       document.createElement('div'),
     );
-    service.getDetails({ placeId: p.place_id }, (place, status) => {
+    service.getDetails({ placeId: p.place_id }, (place: google.maps.places.PlaceResult | null, status: google.maps.places.PlacesServiceStatus) => {
       if (status === google.maps.places.PlacesServiceStatus.OK && place) {
         const formatted = place.formatted_address ?? p.description;
         setAddress(formatted);

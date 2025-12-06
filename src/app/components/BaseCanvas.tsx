@@ -19,7 +19,7 @@ export const BaseCanvas = ({
     "min-h-screen",
     "flex",
     "flex-col",
-    withBottomNav ? "pb-16" : "",
+    withBottomNav ? "pb-20 sm:pb-24" : "",
     className
   ].filter(Boolean).join(" ");
 
@@ -27,7 +27,7 @@ export const BaseCanvas = ({
     "flex-1",
     centerContent ? "flex flex-col items-center justify-center" : "flex flex-col",
     padding,
-    withBottomNav ? "pb-safe" : ""
+    "safe-area-inset"
   ].filter(Boolean).join(" ");
 
   return (

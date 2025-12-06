@@ -1,23 +1,29 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
+import { getSupabaseServer } from '@/lib/supabaseServer';
 
 // PATCH: update isNew jadi false
 export async function PATCH() {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const supabase = await getSupabaseServer();
+
+    // Get authenticated user
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const userId = session.user.id;
+    const { data: updatedUser, error } = await supabase
+      .from('users')
+      .update({ is_new: false })
+      .eq('id', user.id)
+      .select('id, is_new')
+      .single();
 
-    const updatedUser = await prisma.users.update({
-      where: { id: userId },
-      data: { isNew: false },
-      select: { id: true, isNew: true },
-    });
+    if (error) throw error;
 
     return NextResponse.json(updatedUser, { status: 200 });
   } catch (error) {

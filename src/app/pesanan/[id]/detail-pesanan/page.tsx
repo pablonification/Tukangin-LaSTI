@@ -1,8 +1,6 @@
 import Image from 'next/image';
 import { TopBar } from '@/app/components/TopBar';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { getSupabaseServer } from '@/lib/supabaseServer';
 import { BaseCanvas } from '@/app/components/BaseCanvas';
 
 interface PageProps {
@@ -10,19 +8,28 @@ interface PageProps {
 }
 
 const Page = async ({ params }: PageProps) => {
-  const session = await getServerSession(authOptions);
+  const supabase = await getSupabaseServer();
+  
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return (
+      <BaseCanvas centerContent={true} padding='px-6'>
+        <p className='text-center'>Tidak terautentikasi.</p>
+      </BaseCanvas>
+    );
+  }
+
   const { id } = await params;
-  const order = await prisma.orders.findUnique({
-    where: {
-      id: id,
-      userId: session?.user.id,
-    },
-    select: {
-      receiverName: true,
-      address: true,
-      description: true,
-    },
-  });
+  const { data: order } = await supabase
+    .from('orders')
+    .select('receiver_name, address, description')
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .single();
+
   if (!order) {
     return (
       <BaseCanvas centerContent={true} padding='px-6'>
@@ -42,7 +49,7 @@ const Page = async ({ params }: PageProps) => {
             <label className='block text-b3 text-[#3D3D3D] mb-2'>Nama</label>
             <div className='border-b border-[#E5E5E5]'>
               <div className='h-8 text-sh3 text-[#141414] flex items-center'>
-                {order.receiverName}
+                {order.receiver_name}
               </div>
             </div>
           </div>

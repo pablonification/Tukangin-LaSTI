@@ -2,14 +2,14 @@
 
 import { use, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { getSupabaseBrowser } from '@/lib/supabase';
 import Image from 'next/image';
 import Button from '../../../../components/Button';
 import { StickyActions } from '../../../../components/StickyActions';
 import { TopBar } from '../../../../components/TopBar';
 import { useFormStore } from '@/app/store/formStore';
 import { BaseCanvas } from '../../../../components/BaseCanvas';
-import { services } from '@/lib/data';
+import { services, ServiceItem } from '@/lib/data';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -18,8 +18,11 @@ interface PageProps {
 export default function Page({ params }: PageProps) {
   const param = use(params);
   const router = useRouter();
+  // searchParams is used by Next.js for this dynamic route
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const searchParams = useSearchParams();
   const { form, setForm } = useFormStore();
+  const supabase = getSupabaseBrowser();
 
   const [nama, setNama] = useState(form.nama || '');
   const [nomor, setNomor] = useState(form.receiverPhone || ''); // Tambahan nomor hp
@@ -29,38 +32,41 @@ export default function Page({ params }: PageProps) {
   );
 
   const [isReceiver, setIsReceiver] = useState(false);
-  const { data: session } = useSession();
+  const [userName, setUserName] = useState('');
   const [userPhone, setUserPhone] = useState('');
 
   // Ambil data user untuk autofill
   useEffect(() => {
-    fetch('/api/users')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.phone) setUserPhone(data.phone.replace(/^\+62/, '')); // simpan format tanpa +62
-      });
-  }, []);
+    const loadUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      fetch('/api/users')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.name) setUserName(data.name);
+          if (data.phone) setUserPhone(data.phone.replace(/^\+62/, '')); // simpan format tanpa +62
+        });
+    };
+    loadUser();
+  }, [supabase]);
 
   // Autofill jika checkbox dicentang
   useEffect(() => {
-    if (isReceiver && session?.user?.name) {
-      setNama(session.user.name || '');
+    if (isReceiver && userName) {
+      setNama(userName || '');
       setNomor(userPhone || '');
     } else if (!isReceiver) {
       setNama('');
       setNomor('');
     }
-  }, [
-    isReceiver,
-    session?.user?.name,
-    userPhone,
-    form.nama,
-    form.receiverPhone,
-  ]);
+  }, [isReceiver, userName, userPhone, form.nama, form.receiverPhone]);
 
   // Check if service exists
   useEffect(() => {
-    const svc = services.find((s) => s.slug === param.slug);
+    const svc = services.find((s: ServiceItem) => s.slug === param.slug);
     if (!svc) {
       router.replace('/layanan/not-found');
     }

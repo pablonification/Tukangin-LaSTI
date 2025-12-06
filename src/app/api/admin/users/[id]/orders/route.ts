@@ -1,35 +1,33 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { getSupabaseServer } from '@/lib/supabaseServer';
 
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const supabase = await getSupabaseServer();
     const param = await params;
-    const userId = parseInt(param.id, 10);
-    if (isNaN(userId)) {
-      return NextResponse.json({ error: 'Invalid user ID' }, { status: 400 });
-    }
+    const userId = param.id;
 
-    const orders = await prisma.order.findMany({
-      where: { userId },
-      include: {
-        Tukang: true,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const { data: orders, error } = await supabase
+      .from('orders')
+      .select('*, professional:professionals(user_id, users(name))')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
 
-    const mapped = orders.map((o) => ({
-      id: `ORD-${o.id.toString().padStart(3, '0')}`,
+    if (error) throw error;
+
+    const mapped = orders?.map((o: Record<string, unknown>) => ({
+      id: `ORD-${String(o.id).substring(0, 8)}`,
       service: o.service,
       status: o.status,
-      amount: o.total ? `Rp ${o.total.toLocaleString('id-ID')}` : 'Rp 0',
-      date: o.createdAt.toISOString().split('T')[0],
+      amount: o.total ? `Rp ${Number(o.total).toLocaleString('id-ID')}` : 'Rp 0',
+      date: new Date(String(o.created_at)).toISOString().split('T')[0],
       location: o.address,
-      tukang: o.Tukang ? o.Tukang.name : null,
+      tukang: (o.professional as Record<string, unknown>)?.users
+        ? ((o.professional as Record<string, unknown>).users as Record<string, unknown>).name
+        : null,
     }));
 
     return NextResponse.json(mapped);
