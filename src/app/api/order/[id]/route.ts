@@ -93,12 +93,12 @@ export async function POST(req: Request) {
       .insert({
         user_id: user.id,
         receiver_name: data.receiverName,
-        receiver_phone: '', // Fetch from profile if needed
+        receiver_phone: '',
         service: data.service,
         category: 'General',
         address: data.address,
         description: data.description,
-        status: 'PENDING', // Strict Alignment with BPMN
+        status: 'PENDING',
         subtotal: basePrice,
         discount: 0,
         total: totalEstimation,
