@@ -23,9 +23,17 @@ type ProfessionalData = {
   speciality: string;
 };
 
+type OrderData = {
+  receiver_name: string;
+  receiver_phone: string;
+  address: string;
+  description: string;
+  attachments: string[];
+};
+
 const Page = ({ params }: PageProps) => {
   const { id } = use(params);
-  const [order, setOrder] = useState<any | null>(null);
+  const [order, setOrder] = useState<OrderData | null>(null);
   const [tracking, setTracking] = useState<TrackingData | null>(null);
   const [professional, setProfessional] = useState<ProfessionalData | null>(null);
   const [loading, setLoading] = useState(true);
