@@ -42,6 +42,8 @@ model Users {
   suspensions  Suspensions[]
   orders       Orders[]
   professional Professionals?
+  warranties   Warranties[]
+  reviews      Reviews[]
 }
 
 model Suspensions {
@@ -81,6 +83,8 @@ model Orders {
   voucher      Vouchers?      @relation(fields: [voucherId], references: [id])
   professional Professionals? @relation(fields: [professionalId], references: [userId])
   attachments  String[]
+  warranties   Warranties[]
+  reviews      Reviews[]
 }
 
 model Professionals {
@@ -92,8 +96,10 @@ model Professionals {
   joined_at     DateTime @default(now())
 
   // Relations
-  user   Users    @relation(fields: [userId], references: [id])
-  orders Orders[]
+  user       Users        @relation(fields: [userId], references: [id])
+  orders     Orders[]
+  warranties Warranties[]
+  reviews    Reviews[]
 }
 
 model Vouchers {
@@ -108,4 +114,37 @@ model Vouchers {
 
   // Relations
   orders Orders[]
+}
+
+model Warranties {
+  id             String   @id @default(uuid())
+  orderId        String
+  userId         String
+  professionalId String?
+  status         String   @default("ACTIVE")
+  coverageType   String   @default("Standard Service Warranty")
+  validUntil     DateTime
+  terms          String
+  createdAt      DateTime @default(now())
+
+  // Relations
+  order        Orders         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user         Users          @relation(fields: [userId], references: [id])
+  professional Professionals? @relation(fields: [professionalId], references: [userId])
+}
+
+model Reviews {
+  id             String   @id @default(uuid())
+  orderId        String
+  userId         String
+  professionalId String
+  rating         Int      // Validation: 1-5 (enforced at application level)
+  comment        String?
+  tags           String[]
+  createdAt      DateTime @default(now())
+
+  // Relations
+  order        Orders        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user         Users         @relation(fields: [userId], references: [id])
+  professional Professionals @relation(fields: [professionalId], references: [userId])
 }

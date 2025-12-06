@@ -34,7 +34,7 @@ export default function FormPage({ svc }: FormPageProps) {
               data: { user },
             } = await supabase.auth.getUser();
 
-            const res = await fetch('/api/order', {
+            const res = await fetch('/api/services', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({

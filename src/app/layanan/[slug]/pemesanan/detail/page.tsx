@@ -9,7 +9,6 @@ import { StickyActions } from '../../../../components/StickyActions';
 import { TopBar } from '../../../../components/TopBar';
 import { useFormStore } from '@/app/store/formStore';
 import { BaseCanvas } from '../../../../components/BaseCanvas';
-import { services, ServiceItem } from '@/lib/data';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -64,13 +63,38 @@ export default function Page({ params }: PageProps) {
     }
   }, [isReceiver, userName, userPhone, form.nama, form.receiverPhone]);
 
-  // Check if service exists
+  // Ensure service info exists in store; fallback fetch by slug
   useEffect(() => {
-    const svc = services.find((s: ServiceItem) => s.slug === param.slug);
-    if (!svc) {
-      router.replace('/layanan/not-found');
-    }
-  }, [param.slug, router]);
+    const ensureService = async () => {
+      if (form.slug === param.slug && form.serviceName) return;
+
+      try {
+        const res = await fetch(`/api/services?slug=${param.slug}`);
+        const json = await res.json();
+
+        if (!res.ok || !json?.success || !json.data?.length) {
+          router.replace('/layanan/not-found');
+          return;
+        }
+
+        const svc = json.data[0];
+        setForm({
+          serviceId: svc.id,
+          serviceName: svc.name,
+          slug: svc.slug,
+          priceMin: svc.price_min,
+          priceMax: svc.price_max,
+          isFixed: svc.is_fixed,
+          category: svc.category,
+        });
+      } catch (err) {
+        console.error('Failed to load service detail', err);
+        router.replace('/layanan/not-found');
+      }
+    };
+
+    ensureService();
+  }, [form.slug, form.serviceName, param.slug, router, setForm]);
 
   // (No longer needed: location info is set in formStore directly from previous page)
 

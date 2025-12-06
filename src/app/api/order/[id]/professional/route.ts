@@ -15,7 +15,6 @@ export async function GET(
 
     const { id } = await params;
 
-    // Strict Alignment: Report 4.2.a
     // Query joins: Order -> Professional -> User (for name/photo)
     const { data: order, error } = await supabase
       .from('orders')
@@ -33,6 +32,7 @@ export async function GET(
         )
       `)
       .eq('id', id)
+      .eq('user_id', user.id)
       .single();
 
     if (error || !order) {

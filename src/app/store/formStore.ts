@@ -12,6 +12,11 @@ export interface FormData {
   latitude?: string;
   longitude?: string;
   slug?: string;
+  serviceId?: string;
+  priceMin?: number;
+  priceMax?: number;
+  isFixed?: boolean;
+  category?: string;
   serviceName?: string;
   voucherCode?: string;
   voucherName?: string;

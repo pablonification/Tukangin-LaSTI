@@ -27,6 +27,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('is_active')
+      .eq('id', user.id)
+      .single();
+
+    if (userProfile && !userProfile.is_active) {
+      return NextResponse.json(
+        { error: 'Account suspended. Please contact support.' }, 
+        { status: 403 }
+      );
+    }
+
     const json = await req.json();
     const data = CreateOrderSchema.parse(json);
 

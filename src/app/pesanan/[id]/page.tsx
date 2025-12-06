@@ -1,14 +1,36 @@
+"use client";
+
 import Image from 'next/image';
+import Link from 'next/link';
+import { use, useEffect, useState } from 'react';
 import { TopBar } from '@/app/components/TopBar';
 import Button from '@/app/components/Button';
-import Link from 'next/link';
-import { getSupabaseServer } from '@/lib/supabaseServer';
 import { BaseCanvas } from '@/app/components/BaseCanvas';
 import { services, ServiceItem } from '@/lib/data';
+import { PaymentModal } from '@/app/components/PaymentModal';
+import { ReviewModal } from '@/app/components/ReviewModal';
 
 interface PageProps {
   params: Promise<{ id: string }>;
 }
+
+type OrderSummary = {
+  id: string;
+  service: string;
+  status: string;
+  created_at: string;
+  subtotal?: number | null;
+  discount?: number | null;
+  total?: number | null;
+  attachments?: string[] | null;
+};
+
+type ProfessionalSummary = {
+  id: string;
+  name: string;
+  rating?: number;
+  total_jobs?: number;
+};
 
 const formatIDR = (v: number) =>
   new Intl.NumberFormat('id-ID', {
@@ -68,44 +90,88 @@ const getServiceMeta = (key: string) => {
   return { name, icon };
 };
 
-const Page = async ({ params }: PageProps) => {
-  const { id } = await params;
-  const supabase = await getSupabaseServer();
-  
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+const Page = ({ params }: PageProps) => {
+  const { id } = use(params);
+  const [order, setOrder] = useState<OrderSummary | null>(null);
+  const [professional, setProfessional] = useState<ProfessionalSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isPaymentOpen, setPaymentOpen] = useState(false);
+  const [isReviewOpen, setReviewOpen] = useState(false);
 
-  if (!user) {
+  useEffect(() => {
+    const fetchOrder = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/order/${id}`);
+        const data = await res.json();
+
+        if (!res.ok) {
+          setError(data?.error || 'Gagal memuat pesanan');
+          return;
+        }
+
+        setOrder(data);
+      } catch (err) {
+        console.error(err);
+        setError('Gagal memuat pesanan');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const fetchProfessional = async () => {
+      try {
+        const res = await fetch(`/api/order/${id}/professional`);
+        const data = await res.json();
+        if (data?.success) setProfessional(data.data.mitra);
+      } catch (err) {
+        console.error('Failed to fetch professional', err);
+      }
+    };
+
+    fetchOrder();
+    fetchProfessional();
+  }, [id]);
+
+  const handleComplete = async () => {
+    if (!order) return;
+    try {
+      const res = await fetch(`/api/order/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'COMPLETED' }),
+      });
+      if (!res.ok) return;
+      // Refresh order data to reflect completion and warranty creation
+      const refreshed = await fetch(`/api/order/${id}`);
+      if (refreshed.ok) {
+        const data = await refreshed.json();
+        setOrder(data);
+      }
+    } catch (err) {
+      console.error('Failed to complete order', err);
+    }
+  };
+
+  if (loading) {
     return (
       <BaseCanvas centerContent={true} padding='px-6'>
-        <p className='text-center'>Tidak terautentikasi.</p>
+        <p className='text-center'>Memuat pesanan...</p>
       </BaseCanvas>
     );
   }
 
-  const { data: order } = await supabase
-    .from('orders')
-    .select(`
-      *,
-      professional:professionals(
-        user_id,
-        orders:orders(count)
-      )
-    `)
-    .eq('id', id)
-    .eq('user_id', user.id)
-    .single();
-
-  if (!order) {
+  if (error || !order) {
     return (
       <BaseCanvas centerContent={true} padding='px-6'>
-        <p className='text-center'>Pesanan tidak ditemukan.</p>
+        <p className='text-center'>{error || 'Pesanan tidak ditemukan.'}</p>
       </BaseCanvas>
     );
   }
 
-  console.log(order);
+  const dpAmount = Math.round((order.total || 0) / 2);
+
   return (
     <BaseCanvas centerContent={false} padding='px-0'>
       <TopBar backHref='/pesanan' text='Ringkasan Pesanan' />
@@ -169,12 +235,14 @@ const Page = async ({ params }: PageProps) => {
             <div className='h-14 w-14 rounded-xl bg-[#D9D9D9]' />
             <div className='flex-1 flex flex-col justify-between h-12'>
               <div className='text-sh3 text-[#141414]'>
-                {order.professional?.user_id} Anies Baswedan
+                {professional?.name || 'Belum ditugaskan'}
               </div>
               <div className='flex items-center gap-2 text-b2 text-[#7D7D7D]'>
-                <span>{order.professional?.orders?.[0]?.count || 0}200+ panggilan</span>
+                <span>
+                  {professional?.total_jobs ? `${professional.total_jobs}+ panggilan` : 'Menunggu penugasan'}
+                </span>
                 <Image src='/star.svg' alt='' width={16} height={16} />
-                <span>4.9</span>
+                <span>{professional?.rating ?? '-'}</span>
               </div>
             </div>
           </div>
@@ -217,7 +285,7 @@ const Page = async ({ params }: PageProps) => {
           <div className='mt-3 rounded-2xl bg-white py-3'>
             <PriceRow
               label='Harga'
-              value={formatIDR(order.total ? order.total : 0)}
+              value={formatIDR(order.subtotal ? order.subtotal : order.total || 0)}
               valueClassName='text-[#7D7D7D]'
             />
             <PriceRow
@@ -233,6 +301,57 @@ const Page = async ({ params }: PageProps) => {
           </div>
         </section>
 
+        {/* DP Action */}
+        {order.status === 'PENDING' && (
+          <section className='pt-4'>
+            <div className='bg-orange-50 p-3 rounded-lg border border-orange-200 mb-3'>
+              <p className='text-b3 text-orange-700'>
+                Menunggu pembayaran DP untuk mencari tukang.
+              </p>
+            </div>
+            <Button
+              variant='primary'
+              className='w-full'
+              onClick={() => setPaymentOpen(true)}
+            >
+              Bayar DP ({formatIDR(dpAmount)})
+            </Button>
+          </section>
+        )}
+
+        {/* Completion + Review */}
+        {order.status === 'PROCESSING' && (
+          <section className='pt-4 flex flex-col gap-2'>
+            <Button
+              variant='custom'
+              className='bg-[#0CA2EB] text-white hover:bg-[#0CA2EB]/90 w-full'
+              onClick={handleComplete}
+            >
+              Tandai Selesai
+            </Button>
+          </section>
+        )}
+
+        {order.status === 'COMPLETED' && (
+          <section className='pt-4 flex flex-col gap-2'>
+            <Button
+              variant='custom'
+              className='bg-[#0082C9] text-white hover:bg-[#0082C9]/90 w-full'
+              onClick={() => setReviewOpen(true)}
+            >
+              Beri Ulasan
+            </Button>
+            <Link href={`/garansi`}>
+              <Button
+                variant='secondary'
+                className='w-full'
+              >
+                Lihat Garansi
+              </Button>
+            </Link>
+          </section>
+        )}
+
         {/* Order Again Button - regular button in content flow */}
         <section className='pt-4'>
           <Link href={`/pesanan/${id}/pemesanan`}>
@@ -245,6 +364,21 @@ const Page = async ({ params }: PageProps) => {
           </Link>
         </section>
       </div>
+
+      <PaymentModal
+        isOpen={isPaymentOpen}
+        onClose={() => setPaymentOpen(false)}
+        orderId={id}
+        amount={(order.total || 0) / 2}
+      />
+
+      <ReviewModal
+        isOpen={isReviewOpen}
+        onClose={() => setReviewOpen(false)}
+        orderId={id}
+        professionalId={professional?.id}
+        onSubmitted={() => setReviewOpen(false)}
+      />
     </BaseCanvas>
   );
 };

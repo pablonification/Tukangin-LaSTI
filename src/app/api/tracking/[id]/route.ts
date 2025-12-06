@@ -11,6 +11,16 @@ export async function GET(
 
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('is_active')
+      .eq('id', user.id)
+      .single();
+
+    if (userProfile && !userProfile.is_active) {
+      return NextResponse.json({ error: 'Account suspended' }, { status: 403 });
+    }
+
     const { id } = await params;
 
     // Verify order ownership

@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { StickyActions } from '../../../components/StickyActions';
 import { TopBar } from '../../../components/TopBar';
 import { useFormStore } from '@/app/store/formStore';
-import { services } from '@/lib/data';
 import { BaseCanvas } from '../../../components/BaseCanvas';
 
 interface PageProps {
@@ -24,14 +23,41 @@ const Page = ({ params }: PageProps) => {
   const [geoStatus, setGeoStatus] = useState<
     'idle' | 'requesting' | 'granted' | 'denied' | 'error'
   >('idle');
+  const [loadingService, setLoadingService] = useState(true);
+  const [serviceError, setServiceError] = useState<string | null>(null);
 
   useEffect(() => {
-    const svc = services.find((s) => s.slug === slug);
-    if (svc) {
-      setForm({ serviceName: svc.name, slug: svc.slug });
-    } else {
-      router.replace('/layanan/not-found');
-    }
+    const loadService = async () => {
+      try {
+        const res = await fetch(`/api/services?slug=${slug}`);
+        const json = await res.json();
+
+        if (!res.ok || !json?.success || !json.data?.length) {
+          setServiceError('Layanan tidak ditemukan');
+          router.replace('/layanan/not-found');
+          return;
+        }
+
+        const svc = json.data[0];
+        setForm({
+          serviceId: svc.id,
+          serviceName: svc.name,
+          slug: svc.slug,
+          priceMin: svc.price_min,
+          priceMax: svc.price_max,
+          isFixed: svc.is_fixed,
+          category: svc.category,
+        });
+      } catch (err) {
+        console.error('Failed to load service', err);
+        setServiceError('Gagal memuat layanan');
+        router.replace('/layanan/not-found');
+      } finally {
+        setLoadingService(false);
+      }
+    };
+
+    loadService();
   }, [slug, setForm, router]);
 
   // Geolocation request function (call on-demand)
@@ -167,6 +193,12 @@ const Page = ({ params }: PageProps) => {
   return (
     <BaseCanvas centerContent={false} padding='px-0'>
       <TopBar backHref={`/layanan/${slug}`} text='Pilih Lokasi' />
+
+      {loadingService ? (
+        <div className='px-6 py-6 text-[#7D7D7D]'>Memuat layanan…</div>
+      ) : serviceError ? (
+        <div className='px-6 py-6 text-[#FF5A5F]'>{serviceError}</div>
+      ) : null}
 
       {/* Input */}
       <div className='px-6 mt-4'>

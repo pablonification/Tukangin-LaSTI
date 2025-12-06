@@ -33,7 +33,7 @@ export const CallFooter = ({ totalText }: CallFooterProps) => {
         attachments: form.attachments,
       };
 
-      const res = await fetch('/api/order', {
+      const res = await fetch('/api/services', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

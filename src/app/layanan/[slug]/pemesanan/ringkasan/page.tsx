@@ -9,7 +9,6 @@ import { CallFooter } from './CallFooter';
 import { useFormStore } from '@/app/store/formStore';
 import { use } from 'react';
 import { BaseCanvas } from '../../../../components/BaseCanvas';
-import { services } from '@/lib/data';
 
 interface InfoRowProps {
   label: string;
@@ -46,14 +45,34 @@ export default function Page({ params }: PageProps) {
   const { slug } = use(params);
   const router = useRouter();
 
-  const { form } = useFormStore();
-  
+  const { form, setForm } = useFormStore();
+
   useEffect(() => {
-    const svc = services.find((s) => s.slug === slug);
-    if (!svc) {
-      router.replace('/layanan/not-found');
-    }
-  }, [slug, router]);
+    const ensureService = async () => {
+      if (form.slug === slug && form.serviceName) return;
+
+      const res = await fetch(`/api/services?slug=${slug}`);
+      const json = await res.json();
+
+      if (!res.ok || !json?.success || !json.data?.length) {
+        router.replace('/layanan/not-found');
+        return;
+      }
+
+      const svc = json.data[0];
+      setForm({
+        serviceId: svc.id,
+        serviceName: svc.name,
+        slug: svc.slug,
+        priceMin: svc.price_min,
+        priceMax: svc.price_max,
+        isFixed: svc.is_fixed,
+        category: svc.category,
+      });
+    };
+
+    ensureService();
+  }, [form.serviceName, form.slug, router, setForm, slug]);
 
   return (
     <BaseCanvas centerContent={false} padding='px-0'>
@@ -73,7 +92,15 @@ export default function Page({ params }: PageProps) {
                 {form.serviceName || '—'}
               </div>
             </div>
-            <div className='text-b3m text-black'>± Rp 200.000</div>
+            <div className='text-b3m text-black'>
+              {form.priceMin
+                ? form.isFixed || form.priceMin === form.priceMax
+                  ? `Rp ${form.priceMin.toLocaleString('id-ID')}`
+                  : `Rp ${form.priceMin.toLocaleString('id-ID')} – Rp ${
+                      form.priceMax?.toLocaleString('id-ID') ?? ''
+                    }`
+                : '± Rp -'}
+            </div>
           </div>
         </section>
 
@@ -137,20 +164,31 @@ export default function Page({ params }: PageProps) {
         <section>
           <h2 className='text-sh3b text-[#141414]'>Ringkasan Pembayaran</h2>
           <div className='mt-3 rounded-2xl bg-white py-3'>
-            {/* Calculate price and discount from store */}
             {(() => {
-              const basePrice = 200000; // Replace with actual price logic if needed
-              const discount = form.voucherDiscount || 0;
+              const basePrice = form.priceMin || 0;
+              const maxPrice = form.priceMax || basePrice;
+              const discountPct = form.voucherDiscount || 0;
+              const discountedMin = basePrice - (discountPct * basePrice) / 100;
+              const discountedMax = maxPrice - (discountPct * maxPrice) / 100;
+
               return (
                 <>
                   <PriceRow
                     label='Harga'
-                    value={`± ${basePrice.toLocaleString('id-ID')}`}
+                    value={
+                      basePrice === maxPrice
+                        ? `Rp ${basePrice.toLocaleString('id-ID')}`
+                        : `Rp ${basePrice.toLocaleString('id-ID')} – Rp ${maxPrice.toLocaleString('id-ID')}`
+                    }
                   />
-                  {discount > 0 && (
+                  {discountPct > 0 && (
                     <PriceRow
                       label={`Diskon Voucher${form.voucherName ? ` (${form.voucherName})` : ''}`}
-                      value={`- ${(discount * basePrice) / 100}`}
+                      value={`- ${discountPct}% (Rp ${discountedMin.toLocaleString('id-ID')}${
+                        discountedMax !== discountedMin
+                          ? ` – Rp ${discountedMax.toLocaleString('id-ID')}`
+                          : ''
+                      })`}
                       valueClassName='text-[#13BA19]'
                     />
                   )}
@@ -165,10 +203,16 @@ export default function Page({ params }: PageProps) {
 
       {/* Show total price with voucher discount */}
       {(() => {
-        const basePrice = 200000;
+        const basePrice = form.priceMin || 0;
+        const maxPrice = form.priceMax || basePrice;
         const discount = form.voucherDiscount || 0;
-        const total = basePrice - (discount * basePrice) / 100;
-        return <CallFooter totalText={`Rp ${total.toLocaleString('id-ID')}`} />;
+        const totalMin = basePrice - (discount * basePrice) / 100;
+        const totalMax = maxPrice - (discount * maxPrice) / 100;
+        const totalText =
+          totalMin === totalMax
+            ? `Rp ${totalMin.toLocaleString('id-ID')}`
+            : `Rp ${totalMin.toLocaleString('id-ID')} – Rp ${totalMax.toLocaleString('id-ID')}`;
+        return <CallFooter totalText={totalText} />;
       })()}
     </BaseCanvas>
   );
