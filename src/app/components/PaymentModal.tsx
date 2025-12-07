@@ -11,14 +11,17 @@ interface PaymentModalProps {
   onClose: () => void;
   orderId: string;
   amount: number;
+  onSuccess?: (payload?: unknown) => void;
 }
 
-export const PaymentModal = ({ isOpen, onClose, orderId, amount }: PaymentModalProps) => {
+export const PaymentModal = ({ isOpen, onClose, orderId, amount, onSuccess }: PaymentModalProps) => {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handlePayment = async () => {
+    if (loading) return; 
+    
     setLoading(true);
     setError(null);
     try {
@@ -34,15 +37,17 @@ export const PaymentModal = ({ isOpen, onClose, orderId, amount }: PaymentModalP
       if (!res.ok) {
         const msg = (await res.json().catch(() => ({} as never)))?.error;
         setError(msg || "Pembayaran gagal. Coba lagi.");
+        setLoading(false);
         return;
       }
 
+      const result = await res.json().catch(() => undefined);
+      onSuccess?.(result);
       onClose();
       router.refresh();
     } catch (e) {
       console.error(e);
       setError("Terjadi kesalahan. Coba lagi.");
-    } finally {
       setLoading(false);
     }
   };

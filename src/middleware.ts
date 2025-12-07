@@ -21,7 +21,7 @@ export async function middleware(request: NextRequest) {
         // Use setAll to handle setting/deleting multiple cookies at once
         setAll(cookiesToSet) {
           // 1. Update the request cookies (so the current request sees the new session)
-          cookiesToSet.forEach(({ name, value, options }) => 
+          cookiesToSet.forEach(({ name, value }) => 
             request.cookies.set(name, value)
           );
 
@@ -56,6 +56,7 @@ export async function middleware(request: NextRequest) {
     pathname === '/auth/callback' || 
     pathname === '/otp' ||
     pathname === '/login' ||
+    pathname === '/admin/forbidden' ||
     pathname.startsWith('/api/') || // Allow APIs to handle their own 401s
     pathname.startsWith('/_next') ||
     pathname.includes('favicon.ico');
@@ -65,6 +66,26 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = '/';
     return NextResponse.redirect(url);
+  }
+
+  const isAdminPath = pathname.startsWith('/admin');
+  const isAdminInfoPage = pathname === '/admin/forbidden';
+
+  if (user && isAdminPath && !isAdminInfoPage) {
+    const { data: roleRow, error: roleError } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    const derivedRole = roleRow?.role ?? (user as unknown as { role?: string })?.role;
+    const isAllowed = derivedRole === 'ADMIN' || derivedRole === 'DEVELOPER';
+
+    if (roleError || !isAllowed) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/admin/forbidden';
+      return NextResponse.rewrite(url, { status: 403 });
+    }
   }
 
   // Redirect authenticated users away from public pages (Login/Welcome) to Home

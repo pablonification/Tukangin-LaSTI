@@ -2,50 +2,57 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { BottomNav } from '../components/BottomNav';
 import { categories, services } from '../../lib/data';
 import { TopBar } from '../components/TopBar';
 import { BaseCanvas } from '../components/BaseCanvas';
 
 const Page = () => {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState<string>('all');
+
+  // hydrate from url once
+  useEffect(() => {
+    const q = searchParams.get('search');
+    const cat = searchParams.get('category');
+    if (q) setSearchQuery(q);
+    if (cat) setActiveCategory(cat);
+  }, [searchParams]);
+
+  const updateUrl = (nextSearch: string, nextCategory: string) => {
+    const params = new URLSearchParams();
+    if (nextSearch.trim()) params.set('search', nextSearch.trim());
+    if (nextCategory !== 'all') params.set('category', nextCategory);
+    router.replace(`/layanan${params.toString() ? `?${params.toString()}` : ''}`);
+  };
 
   // Filter services based on search query with priority matching
   const filteredServices = useMemo(() => {
-    if (!searchQuery.trim()) {
-      return services;
-    }
-
     const query = searchQuery.toLowerCase().trim();
 
-    // First, get exact name matches
-    const exactNameMatches = services.filter((service) =>
-      service.name.toLowerCase().includes(query),
-    );
+    return services.filter((service) => {
+      const matchesCategory =
+        activeCategory === 'all' || service.category === activeCategory;
 
-    // If we have exact name matches, return those
-    if (exactNameMatches.length > 0) {
-      return exactNameMatches;
-    }
+      if (!query) return matchesCategory;
 
-    // Otherwise, search in descriptions and categories
-    return services.filter(
-      (service) =>
-        service.description.toLowerCase().includes(query) ||
-        service.category.toLowerCase().includes(query),
-    );
-  }, [searchQuery]);
+      const matchesName = service.name.toLowerCase().includes(query);
+      const matchesDesc = service.description.toLowerCase().includes(query);
+      const matchesCategoryText = service.category.toLowerCase().includes(query);
+      return matchesCategory && (matchesName || matchesDesc || matchesCategoryText);
+    });
+  }, [activeCategory, searchQuery]);
 
   const filteredCategories = useMemo(() => {
-    if (!searchQuery.trim()) {
-      return categories;
-    }
-
-    return categories.filter((category) =>
+    const visible = categories.filter((category) =>
       filteredServices.some((service) => service.category === category),
     );
-  }, [filteredServices, searchQuery]);
+    return visible.length ? visible : categories;
+  }, [filteredServices]);
   return (
     <BaseCanvas withBottomNav={true} centerContent={false} padding='px-0'>
       {/* Top Bar */}
@@ -72,14 +79,21 @@ const Page = () => {
               className='flex-1 outline-none text-b2 placeholder:text-gray-400'
               placeholder='Cari layanan...'
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                const next = e.target.value;
+                setSearchQuery(next);
+                updateUrl(next, activeCategory);
+              }}
             />
             <button
               aria-label='Bersihkan'
               className={`h-6 w-6 grid place-items-center flex-shrink-0 ${
                 searchQuery ? 'opacity-100' : 'opacity-0'
               }`}
-              onClick={() => setSearchQuery('')}
+              onClick={() => {
+                setSearchQuery('');
+                updateUrl('', activeCategory);
+              }}
             >
               <Image
                 src='/close-circle.svg'
@@ -91,6 +105,27 @@ const Page = () => {
               />
             </button>
           </div>
+        </div>
+
+        {/* Category filter pills */}
+        <div className='flex gap-2 overflow-x-auto no-scrollbar pb-3'>
+          {[{ label: 'Semua', value: 'all' }, ...categories.map((c) => ({ label: c, value: c }))].map((cat) => (
+            <button
+              key={cat.value}
+              type='button'
+              onClick={() => {
+                setActiveCategory(cat.value);
+                updateUrl(searchQuery, cat.value);
+              }}
+              className={`px-3 py-1 rounded-full border text-b3 whitespace-nowrap transition-colors ${
+                activeCategory === cat.value
+                  ? 'border-[#0082C9] bg-[#E8F6FF] text-[#0082C9]'
+                  : 'border-[#D4D4D4] text-[#141414]'
+              }`}
+            >
+              {cat.label}
+            </button>
+          ))}
         </div>
 
         {/* Service Categories */}

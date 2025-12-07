@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { unstable_cache } from 'next/cache';
+import { unstable_cache, revalidateTag } from 'next/cache';
 import { getSupabaseServer } from '@/lib/supabaseServer';
 import { z } from 'zod';
 
@@ -40,7 +40,7 @@ export async function GET(
     const getOrder = unstable_cache(
       async () => {
         const { data, error } = await supabase
-          .from('Orders')
+          .from('orders')
           .select('*')
           .eq('id', id)
           .eq('user_id', user.id)
@@ -89,7 +89,7 @@ export async function POST(req: Request) {
 
     // 2. Insert Order with 'WAITING_DP' status
     const { data: order, error } = await supabase
-      .from('Orders')
+      .from('orders')
       .insert({
         user_id: user.id,
         receiver_name: data.receiverName,
@@ -141,30 +141,52 @@ export async function PATCH(
 
     const { id } = await params;
     const json = await req.json();
-
-    // Only allow customer to mark as COMPLETED
     if (json.status !== 'COMPLETED') {
       return NextResponse.json({ error: 'Invalid status transition' }, { status: 400 });
     }
 
+    const { data: current, error: fetchError } = await supabase
+      .from('orders')
+      .select('status, professional_id, paid_at, user_id')
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .single();
+
+    if (fetchError || !current) {
+      return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    }
+
+    if (!current.professional_id) {
+      return NextResponse.json(
+        { error: 'Tukang belum ditugaskan. Hubungi admin untuk penugasan.' },
+        { status: 400 },
+      );
+    }
+
+    if (current.status !== 'PROCESSING' && current.status !== 'PENDING') {
+      return NextResponse.json(
+        { error: 'Status pesanan tidak valid untuk penyelesaian.' },
+        { status: 400 },
+      );
+    }
+
     const { data: updatedOrder, error } = await supabase
-      .from('Orders')
+      .from('orders')
       .update({
         status: 'COMPLETED',
         completed_at: new Date().toISOString()
       })
       .eq('id', id)
-      .eq('user_id', user.id) // Ensure ownership
+      .eq('user_id', user.id)
       .select()
       .single();
 
     if (error) throw error;
 
-    // Trigger: Create Warranty Record automatically (Report 4.4.c logic)
     const warrantyExpiry = new Date();
-    warrantyExpiry.setDate(warrantyExpiry.getDate() + 30); // 30 Days Warranty
+    warrantyExpiry.setDate(warrantyExpiry.getDate() + 30);
 
-    await supabase.from('Warranties').insert({
+    await supabase.from('warranties').insert({
       order_id: id,
       user_id: user.id,
       professional_id: updatedOrder.professional_id,
@@ -172,6 +194,11 @@ export async function PATCH(
       valid_until: warrantyExpiry.toISOString(),
       terms: 'Garansi mencakup kebocoran ulang dan kerusakan sparepart yang diganti.'
     });
+
+    try {
+      revalidateTag(`Orders:user:${user.id}`);
+      revalidateTag('Orders:all');
+    } catch {}
 
     return NextResponse.json({
       id: updatedOrder.id,

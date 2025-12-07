@@ -21,6 +21,8 @@ export interface FormData {
   voucherCode?: string;
   voucherName?: string;
   voucherDiscount?: number;
+  voucherType?: string;
+  voucherMaxDiscount?: number;
   receiverPhone?: string;
   attachments?: string[];
   // Add more fields as needed for your multi-step form

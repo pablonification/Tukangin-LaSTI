@@ -2,13 +2,14 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { use, useEffect, useState } from 'react';
+import { use, useCallback, useEffect, useState } from 'react';
 import { TopBar } from '@/app/components/TopBar';
 import Button from '@/app/components/Button';
 import { BaseCanvas } from '@/app/components/BaseCanvas';
 import { services, ServiceItem } from '@/lib/data';
 import { PaymentModal } from '@/app/components/PaymentModal';
 import { ReviewModal } from '@/app/components/ReviewModal';
+import { useRouter } from 'next/navigation';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -87,7 +88,7 @@ const getServiceMeta = (key: string) => {
   const slug = svc?.slug ?? key;
   const name = svc?.name ?? toTitleFromSlug(key);
   const icon = iconBySlug[slug] ?? '/layanan-umum.svg';
-  return { name, icon };
+  return { name, icon, slug };
 };
 
 const Page = ({ params }: PageProps) => {
@@ -98,12 +99,18 @@ const Page = ({ params }: PageProps) => {
   const [error, setError] = useState<string | null>(null);
   const [isPaymentOpen, setPaymentOpen] = useState(false);
   const [isReviewOpen, setReviewOpen] = useState(false);
+  const [completeError, setCompleteError] = useState<string | null>(null);
+  const [warrantyStatus, setWarrantyStatus] = useState<string | null>(null);
+  const [completing, setCompleting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const router = useRouter();
 
-  useEffect(() => {
-    const fetchOrder = async () => {
-      setLoading(true);
+  const refreshOrder = useCallback(
+    async (showSpinner = false, isManual = false) => {
+      if (showSpinner) setLoading(true);
+      if (isManual) setRefreshing(true);
       try {
-        const res = await fetch(`/api/order/${id}`);
+        const res = await fetch(`/api/order/${id}`, { cache: 'no-store' });
         const data = await res.json();
 
         if (!res.ok) {
@@ -116,41 +123,128 @@ const Page = ({ params }: PageProps) => {
         console.error(err);
         setError('Gagal memuat pesanan');
       } finally {
-        setLoading(false);
+        if (showSpinner) setLoading(false);
+        if (isManual) setRefreshing(false);
       }
-    };
+    },
+    [id],
+  );
 
-    const fetchProfessional = async () => {
-      try {
-        const res = await fetch(`/api/order/${id}/professional`);
-        const data = await res.json();
-        if (data?.success) setProfessional(data.data.mitra);
-      } catch (err) {
-        console.error('Failed to fetch professional', err);
-      }
-    };
-
-    fetchOrder();
-    fetchProfessional();
+  const refreshProfessional = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/order/${id}/professional`, { cache: 'no-store' });
+      const data = await res.json();
+      if (data?.success) setProfessional(data.data.mitra);
+    } catch (err) {
+      console.error('Failed to fetch professional', err);
+    }
   }, [id]);
+
+  useEffect(() => {
+    refreshOrder(true);
+    refreshProfessional();
+  }, [refreshOrder, refreshProfessional]);
+
+  useEffect(() => {
+    const fetchWarranty = async () => {
+      try {
+        const res = await fetch(`/api/warranty?orderId=${id}`, { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          setWarrantyStatus(data?.status || 'ACTIVE');
+        } else {
+          setWarrantyStatus(null);
+        }
+      } catch (err) {
+        console.error('Failed to fetch warranty', err);
+        setWarrantyStatus(null);
+      }
+    };
+
+    if (order?.status === 'COMPLETED') {
+      fetchWarranty();
+    }
+  }, [id, order?.status]);
+
+  useEffect(() => {
+    if (!order || order.status === 'COMPLETED' || order.status === 'CANCELLED') {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      refreshOrder(false);
+      refreshProfessional();
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [order, refreshOrder, refreshProfessional]);
+
+  const handlePayRemaining = async () => {
+    if (!order) return;
+    const remainingAmount = Math.round((order.total || 0) / 2);
+    
+    try {
+      const res = await fetch(`/api/order/${id}/payment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          amount: remainingAmount,
+          payment_method: 'cash' // Default payment method for remaining payment
+        }),
+      });
+      
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setCompleteError(data?.error || 'Gagal memproses pembayaran');
+        return;
+      }
+      
+      // Optimistic update - payment successful, work can be completed
+      setOrder((prev) => (prev ? { ...prev, status: 'PROCESSING' } : prev));
+      await refreshOrder(false, true);
+      setCompleteError(null);
+    } catch (err) {
+      console.error('Payment failed:', err);
+      setCompleteError('Gagal memproses pembayaran');
+    }
+  };
 
   const handleComplete = async () => {
     if (!order) return;
+    if (!professional) {
+      setCompleteError('Tunggu tukang ditugaskan sebelum menyelesaikan pesanan.');
+      return;
+    }
     try {
+      setCompleting(true);
       const res = await fetch(`/api/order/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'COMPLETED' }),
       });
-      if (!res.ok) return;
-      // Refresh order data to reflect completion and warranty creation
-      const refreshed = await fetch(`/api/order/${id}`);
-      if (refreshed.ok) {
-        const data = await refreshed.json();
-        setOrder(data);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({} as never));
+        setCompleteError(data?.error || 'Gagal menyelesaikan pesanan.');
+        setCompleting(false);
+        return;
       }
+      
+      // Optimistic update with immediate visual feedback
+      setOrder((prev) => (prev ? { ...prev, status: 'COMPLETED' } : prev));
+      setCompleteError(null);
+      setCompleting(false);
+      
+      // Refresh order data
+      await refreshOrder(false, true);
+      
+      // Navigate to pesanan page after short delay
+      setTimeout(() => {
+        router.push('/pesanan?tab=history');
+      }, 500);
     } catch (err) {
       console.error('Failed to complete order', err);
+      setCompleteError('Gagal menyelesaikan pesanan.');
+      setCompleting(false);
     }
   };
 
@@ -172,9 +266,31 @@ const Page = ({ params }: PageProps) => {
 
   const dpAmount = Math.round((order.total || 0) / 2);
 
+  // Normalize status to uppercase for consistent comparison
+  const orderStatus = order.status?.toUpperCase() || '';
+
   return (
     <BaseCanvas centerContent={false} padding='px-0'>
-      <TopBar backHref='/pesanan' text='Ringkasan Pesanan' />
+      <div className='relative'>
+        <TopBar backHref='/pesanan' text='Ringkasan Pesanan' />
+        <button
+          onClick={() => {
+            refreshOrder(false, true);
+            refreshProfessional();
+          }}
+          disabled={refreshing}
+          className='absolute right-6 top-1/2 -translate-y-1/2 p-2 rounded-lg hover:bg-gray-100 disabled:opacity-50'
+          title='Refresh pesanan'
+        >
+          <Image
+            src='/refresh.svg'
+            alt='Refresh'
+            width={20}
+            height={20}
+            className={refreshing ? 'animate-spin' : ''}
+          />
+        </button>
+      </div>
 
       <div className='px-6 py-6 space-y-8'>
         {/* Jenis Layanan */}
@@ -197,6 +313,7 @@ const Page = ({ params }: PageProps) => {
                       <div className='text-b2m text-[#141414]'>{name}</div>
                       <div className='text-b3 text-[#7D7D7D]'>
                         {order.status}
+                        {warrantyStatus ? ' · WARRANTY' : ''}
                       </div>
                     </div>
                   </>
@@ -301,8 +418,8 @@ const Page = ({ params }: PageProps) => {
           </div>
         </section>
 
-        {/* DP Action */}
-        {order.status === 'PENDING' && (
+        {/* DP Action - Only for PENDING orders */}
+        {orderStatus === 'PENDING' && (
           <section className='pt-4'>
             <div className='bg-orange-50 p-3 rounded-lg border border-orange-200 mb-3'>
               <p className='text-b3 text-orange-700'>
@@ -319,20 +436,47 @@ const Page = ({ params }: PageProps) => {
           </section>
         )}
 
-        {/* Completion + Review */}
-        {order.status === 'PROCESSING' && (
-          <section className='pt-4 flex flex-col gap-2'>
+        {/* Remaining Payment Section - Only for PROCESSING orders with tukang assigned */}
+        {orderStatus === 'PROCESSING' && professional && (
+          <section className='pt-4'>
+            <div className='bg-blue-50 p-4 rounded-lg border border-blue-200 mb-3'>
+              <p className='text-b2b text-blue-900 mb-1'>Pembayaran Sisa</p>
+              <p className='text-b3 text-blue-700'>
+                Bayar sisanya setelah pekerjaan selesai untuk menandai pesanan selesai.
+              </p>
+            </div>
             <Button
-              variant='custom'
-              className='bg-[#0CA2EB] text-white hover:bg-[#0CA2EB]/90 w-full'
-              onClick={handleComplete}
+              variant='primary'
+              className='w-full mb-3'
+              onClick={handlePayRemaining}
             >
-              Tandai Selesai
+              Bayar Sisa ({formatIDR(Math.round((order.total || 0) / 2))})
             </Button>
+            <div className='text-center'>
+              <button
+                onClick={handleComplete}
+                disabled={completing}
+                className='text-b3 text-[#0082C9] hover:underline disabled:opacity-50'
+              >
+                {completing ? 'Memproses...' : 'Atau tandai selesai tanpa bayar'}
+              </button>
+            </div>
+            {completeError && (
+              <div className='text-sm text-red-600 mt-2 text-center'>{completeError}</div>
+            )}
           </section>
         )}
 
-        {order.status === 'COMPLETED' && (
+        {/* Waiting for Tukang Assignment - Only for PROCESSING without tukang */}
+        {orderStatus === 'PROCESSING' && !professional && (
+          <section className='pt-4'>
+            <div className='bg-yellow-50 border border-yellow-200 text-b3 text-yellow-800 p-3 rounded-lg'>
+              Menunggu penugasan tukang. Pembayaran sisa dan penyelesaian pesanan akan tersedia setelah tukang ditetapkan.
+            </div>
+          </section>
+        )}
+
+        {orderStatus === 'COMPLETED' && (
           <section className='pt-4 flex flex-col gap-2'>
             <Button
               variant='custom'
@@ -354,14 +498,19 @@ const Page = ({ params }: PageProps) => {
 
         {/* Order Again Button - regular button in content flow */}
         <section className='pt-4'>
-          <Link href={`/pesanan/${id}/pemesanan`}>
-            <Button
-              variant='custom'
-              className='bg-[#0082C9] text-white hover:bg-[#0082C9]/90 w-full'
-            >
-              Pesan Lagi
-            </Button>
-          </Link>
+          {(() => {
+            const { slug } = getServiceMeta(order.service);
+            const href = slug ? `/layanan/${slug}/pemesanan` : '/layanan';
+            return (
+              <Button
+                variant='custom'
+                className='bg-[#0082C9] text-white hover:bg-[#0082C9]/90 w-full'
+                onClick={() => router.push(href)}
+              >
+                Pesan Lagi
+              </Button>
+            );
+          })()}
         </section>
       </div>
 
@@ -370,6 +519,10 @@ const Page = ({ params }: PageProps) => {
         onClose={() => setPaymentOpen(false)}
         orderId={id}
         amount={(order.total || 0) / 2}
+        onSuccess={() => {
+          setOrder((prev) => (prev ? { ...prev, status: 'PROCESSING', paid_at: new Date().toISOString() } : prev));
+          refreshOrder(false);
+        }}
       />
 
       <ReviewModal

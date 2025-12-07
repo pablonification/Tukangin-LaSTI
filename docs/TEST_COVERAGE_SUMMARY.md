@@ -156,21 +156,6 @@ The following Plan scenarios require E2E/UI testing (Playwright/Cypress):
 
 ---
 
-## ✅ Suspension System Status
-
-**Current State:** ✅ **FULLY IMPLEMENTED** - All critical API endpoints now enforce suspension checks.
-
-| Action | Should Block Suspended Users | Current Status | Test Coverage |
-|--------|------------------------------|----------------|---------------|
-| Create orders | ✅ Yes | ✅ **Implemented** | `scenario_8_suspension_enforcement.test.ts` (8.A) |
-| Make DP payments | ✅ Yes | ✅ **Implemented** | `scenario_8_suspension_enforcement.test.ts` (8.B) |
-| Access tracking | ✅ Yes | ✅ **Implemented** | `scenario_8_suspension_enforcement.test.ts` (8.D) |
-| Upload proof files | ✅ Yes | ⚠️ Not validated | *No suspension check needed (file upload only)* |
-| Complete orders | ✅ Yes | ⚠️ Not validated | *Admin/Professional action (not user-facing)* |
-| Submit reviews | ✅ Yes | ✅ **Implemented** | `scenario_8_suspension_enforcement.test.ts` (8.C) |
-| View warranties | ✅ Yes | ⚠️ Not validated | *Read-only operation* |
-| Claim warranties | ✅ Yes | ✅ **Implemented** | Covered by warranty claim API |
-
 ### Implementation Details
 
 **Security Pattern:** All critical endpoints now include a `checkSuspension()` guard:
@@ -178,7 +163,7 @@ The following Plan scenarios require E2E/UI testing (Playwright/Cypress):
 ```typescript
 // 🔒 SECURITY CHECK: Suspension
 const { data: userProfile } = await supabase
-  .from('Users')
+  .from('users')
   .select('is_active')
   .eq('id', user.id)
   .single();

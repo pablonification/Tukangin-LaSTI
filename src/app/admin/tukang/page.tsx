@@ -15,6 +15,7 @@ import ExportTukangModal from '../../components/admin/ExportTukangModal';
 import BulkTukangActionModal from '../../components/admin/BulkTukangActionModal';
 import { useModal } from '../../components/ModalProvider';
 import { useNotification } from '../../components/NotificationProvider';
+import { JOB_CATEGORIES } from '@/lib/data';
 
 interface Tukang {
   id: string;
@@ -281,13 +282,7 @@ export default function AdminTukangPage() {
       label: 'Specialization',
       options: [
         { value: 'all', label: 'All Specializations' },
-        { value: 'Kelistrikan', label: 'Kelistrikan' },
-        { value: 'Perpipaan', label: 'Perpipaan' },
-        { value: 'AC', label: 'AC' },
-        { value: 'Konstruksi', label: 'Konstruksi' },
-        { value: 'Atap', label: 'Atap' },
-        { value: 'Cat', label: 'Cat' },
-        { value: 'Elektronik', label: 'Elektronik' },
+        ...JOB_CATEGORIES.map((cat) => ({ value: cat, label: cat })),
       ],
       value: filters.specialization,
       onChange: (value: string) => handleFilterChange('specialization', value),

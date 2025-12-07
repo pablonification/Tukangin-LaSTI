@@ -6,6 +6,8 @@ import Button from '../../../../components/Button';
 import { StickyActions } from '../../../../components/StickyActions';
 import { useFormStore } from '@/app/store/formStore';
 import { useRouter } from 'next/navigation';
+import { useNotification } from '@/app/components/NotificationProvider';
+import { JOB_CATEGORIES } from '@/lib/data';
 
 interface CallFooterProps {
   totalText: string;
@@ -18,30 +20,82 @@ export const CallFooter = ({ totalText }: CallFooterProps) => {
   const { form, resetForm } = useFormStore();
 
   const router = useRouter();
+  const { showError } = useNotification();
 
   const handleContinue = async () => {
     setLoading(true);
     try {
+      const basePrice = form.priceMin ?? 0;
+      const discountAmount = form.voucherDiscount ?? 0;
+      const voucherType = (form.voucherType || '').toUpperCase();
+      const maxDiscountCap = form.voucherMaxDiscount != null ? form.voucherMaxDiscount : null;
+      
+      // Calculate discount based on voucher type
+      const isFlat = voucherType === 'FLAT' || (voucherType !== 'PERCENT' && discountAmount > 100);
+      let discountValue = 0;
+      if (discountAmount > 0) {
+        if (isFlat) {
+          discountValue = discountAmount;
+        } else {
+          const percentValue = Math.min(discountAmount, 100);
+          const rawDiscount = Math.floor((percentValue * basePrice) / 100);
+          discountValue = rawDiscount;
+          
+          // Apply max discount cap if specified
+          if (maxDiscountCap != null && discountValue > maxDiscountCap) {
+            console.log(`💰 Max discount cap applied: ${rawDiscount} → ${maxDiscountCap}`);
+            discountValue = maxDiscountCap;
+          }
+        }
+        // For flat vouchers, also apply max cap
+        if (isFlat && maxDiscountCap != null) {
+          discountValue = Math.min(discountValue, maxDiscountCap);
+        }
+        // Discount cannot exceed base price
+        discountValue = Math.min(discountValue, basePrice);
+      }
+      
+      const totalPrice = Math.max(0, basePrice - discountValue);
+      
+      console.log('💳 Order Creation:', {
+        basePrice,
+        voucherType,
+        discountAmount,
+        maxDiscountCap,
+        calculatedDiscount: discountValue,
+        totalPrice
+      });
+      const requestedCategory = form.category || 'Layanan Umum & Pemasangan';
+      const normalizedCategory =
+        JOB_CATEGORIES.find((cat) => cat.toLowerCase() === requestedCategory.toLowerCase()) ||
+        requestedCategory;
+
       // Prepare order payload
       const payload = {
         receiverName: form.nama || '',
-        service: form.slug || '',
+        service: form.serviceName || form.slug || '',
+        category: normalizedCategory,
         address: form.locationAddress || '',
         description: form.catatan || '',
         voucherCode: form.voucherCode || undefined,
         receiverPhone: form.receiverPhone,
         attachments: form.attachments,
+        subtotal: basePrice,
+        discount: discountValue,
+        total: totalPrice,
       };
 
-      const res = await fetch('/api/services', {
+      const res = await fetch('/api/order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const message = body?.error || 'Gagal membuat order, coba lagi.';
+        showError(message);
         setLoading(false);
-        alert('Gagal membuat order, coba lagi.');
         return;
       }
 

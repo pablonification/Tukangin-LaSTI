@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { BottomNav } from '@/app/components/BottomNav';
 import { BaseCanvas } from '@/app/components/BaseCanvas';
 import Image from 'next/image';
@@ -64,27 +64,48 @@ const PesananPage = () => {
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [tab, setTab] = useState<'active' | 'history'>('active');
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  
+  // Check URL parameter for tab
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab');
+      if (tabParam === 'history') {
+        setTab('history');
+      }
+    }
+  }, []);
 
-  useEffect(() => {
-    const loadOrders = async () => {
+  const refreshOrders = useCallback(
+    async (showSpinner = false, isManual = false) => {
+      if (showSpinner) setLoading(true);
+      if (isManual) setRefreshing(true);
       try {
-        const res = await fetch('/api/order');
+        const res = await fetch('/api/order', { cache: 'no-store' });
         if (!res.ok) {
           throw new Error(`HTTP error ${res.status}`);
         }
         const data = await res.json();
-
-        // misal API langsung return orders dari prisma
         setOrders(data);
       } catch (err) {
         console.error('Failed to load orders:', err);
       } finally {
-        setLoading(false);
+        if (showSpinner) setLoading(false);
+        if (isManual) setRefreshing(false);
       }
-    };
+    },
+    [],
+  );
 
-    loadOrders();
-  }, []);
+  useEffect(() => {
+    refreshOrders(true);
+    const interval = setInterval(() => {
+      refreshOrders(false);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [refreshOrders]);
 
   // pisah aktif dan history (anggap `status === 'Selesai'` = history)
   const activeItems: typeof orders = [];
@@ -102,7 +123,23 @@ const PesananPage = () => {
     <BaseCanvas withBottomNav={true} centerContent={false} padding="px-0">
       <div className='w-full'>
         <header className='pt-6 pb-4 px-6 border-b border-[#D4D4D4]'>
-          <h1 className='text-sh2 text-[#141414]'>Pesanan Anda</h1>
+          <div className='flex items-center justify-between'>
+            <h1 className='text-sh2 text-[#141414]'>Pesanan Anda</h1>
+            <button
+              onClick={() => refreshOrders(false, true)}
+              disabled={refreshing}
+              className='p-2 rounded-lg hover:bg-gray-100 disabled:opacity-50'
+              title='Refresh pesanan'
+            >
+              <Image
+                src='/refresh.svg'
+                alt='Refresh'
+                width={20}
+                height={20}
+                className={refreshing ? 'animate-spin' : ''}
+              />
+            </button>
+          </div>
         </header>
 
         <div className='text-b2m mt-4 flex items-center gap-3 px-6 py-2'>

@@ -48,7 +48,8 @@ export default async function ProfilePage() {
     : null;
 
   const displayName = user?.name ?? 'Nama Lengkap';
-  const displayPhone = user?.phone ?? '+6281234567890';
+  const rawPhone = user?.phone ?? '+6281234567890';
+  const displayPhone = '0' + rawPhone;
   const displayEmail = user?.email ?? 'email@domain.com';
 
   return (

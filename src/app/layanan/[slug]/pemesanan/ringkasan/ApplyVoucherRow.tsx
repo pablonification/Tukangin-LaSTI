@@ -33,6 +33,10 @@ export const ApplyVoucherRow = () => {
       } else if (data.valid) {
         setForm({
           voucherCode: code,
+          voucherName: data.code || code,
+          voucherDiscount: Number(data.discount_value) || 0,
+          voucherType: (data.discount_type || 'FLAT').toUpperCase(),
+          voucherMaxDiscount: data.max_discount != null ? Number(data.max_discount) : null,
         });
         setOpen(false);
       } else {

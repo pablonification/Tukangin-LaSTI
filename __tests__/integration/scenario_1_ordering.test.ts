@@ -13,8 +13,11 @@ type OrderRow = {
   user_id: string;
   voucher_id?: number | null;
   total: number;
+  subtotal?: number | null;
+  discount?: number | null;
   status: string;
   service?: string;
+  category?: string;
 };
 
 type VoucherRow = {
@@ -28,7 +31,7 @@ type VoucherRow = {
 // Minimal in-memory supabase stub tailored to the route behaviours
 const supabaseState: { orders: OrderRow[]; vouchers: VoucherRow[]; user: { id: string } | null } = {
   orders: [
-    { id: 'ord-1', user_id: 'user-123', total: 150_000, status: 'PENDING' },
+    { id: 'ord-1', user_id: 'user-123', total: 150_000, subtotal: 150_000, discount: 0, status: 'PENDING', category: 'AC' },
   ],
   vouchers: [
     { id: 1, code: 'PERC10', is_active: true, expiry_date: null, usage_limit: 2 },
@@ -80,8 +83,11 @@ const supabaseMock = {
                 user_id: payload.user_id as string,
                 voucher_id: (payload.voucher_id as number | null | undefined) ?? null,
                 total: (payload.total as number | undefined) ?? 150_000,
+                subtotal: (payload.subtotal as number | undefined) ?? 150_000,
+                discount: (payload.discount as number | undefined) ?? 0,
                 status: 'PENDING',
                 service: payload.service as string | undefined,
+                category: payload.category as string | undefined,
               };
               supabaseState.orders.push(newOrder);
               return { data: newOrder, error: null };
@@ -169,8 +175,12 @@ describe('Scenario 1: Pencarian & Pemesanan (Ordering Logic)', () => {
         receiverName: 'Budi',
         receiverPhone: '081234567890',
         service: 'Cuci AC Split',
+        category: 'AC',
         address: 'Jl. Dago',
         description: 'AC kotor',
+        subtotal: 150000,
+        discount: 0,
+        total: 150000,
       }),
       headers: { 'Content-Type': 'application/json' },
     });
@@ -191,8 +201,12 @@ describe('Scenario 1: Pencarian & Pemesanan (Ordering Logic)', () => {
         receiverName: 'Budi',
         receiverPhone: '081234567890',
         service: 'Cuci AC',
+        category: 'AC',
         address: 'Jl. Dago',
         description: 'AC kotor',
+        subtotal: 120000,
+        discount: 0,
+        total: 120000,
       }),
       headers: { 'Content-Type': 'application/json' },
     });
@@ -208,9 +222,13 @@ describe('Scenario 1: Pencarian & Pemesanan (Ordering Logic)', () => {
         receiverName: 'Budi',
         receiverPhone: '081234567890',
         service: 'Cuci AC Split',
+        category: 'AC',
         address: 'Jl. Dago',
         description: 'AC kotor',
         voucherCode: 'INACTIVE',
+        subtotal: 150000,
+        discount: 0,
+        total: 150000,
       }),
       headers: { 'Content-Type': 'application/json' },
     });

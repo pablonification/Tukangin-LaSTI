@@ -2,13 +2,37 @@ import { NextResponse } from 'next/server';
 import { unstable_cache, revalidateTag } from 'next/cache';
 import { getSupabaseServer } from '@/lib/supabaseServer';
 import { z, ZodError } from 'zod';
+import { JOB_CATEGORIES } from '@/lib/data';
+
+const normalizeCategory = (value: string) => {
+  const lowered = value.trim().toLowerCase();
+  const direct = JOB_CATEGORIES.find((cat) => cat.toLowerCase() === lowered);
+  if (direct) return direct;
+
+  const synonyms: Record<string, string> = {
+    listrik: 'Kelistrikan',
+    kelistrikan: 'Kelistrikan',
+    ac: 'AC',
+    perpipaan: 'Perpipaan',
+    konstruksi: 'Konstruksi',
+    elektronik: 'Elektronik',
+    atap: 'Atap',
+    cat: 'Cat',
+  };
+
+  return synonyms[lowered] ?? value;
+};
 
 const CreateOrderSchema = z.object({
   receiverName: z.string().min(1, { message: 'Receiver name is required' }),
   receiverPhone: z.string().min(10, { message: 'Not a valid phone number' }),
   service: z.string().min(1, { message: 'Service is required' }),
+  category: z.string().min(1, { message: 'Category is required' }),
   address: z.string().min(1, { message: 'Address is required' }),
   description: z.string().min(1, { message: 'Description is required' }),
+  subtotal: z.number().int().min(0),
+  discount: z.number().int().min(0).default(0),
+  total: z.number().int().min(0),
   voucherCode: z.string().optional(),
   attachments: z.array(z.string()).optional(),
 });
@@ -42,6 +66,7 @@ export async function POST(req: Request) {
 
     const json = await req.json();
     const data = CreateOrderSchema.parse(json);
+    const normalizedCategory = normalizeCategory(data.category);
 
     let voucher = null;
     if (data.voucherCode) {
@@ -84,9 +109,12 @@ export async function POST(req: Request) {
         receiver_name: data.receiverName,
         receiver_phone: data.receiverPhone,
         service: data.service,
-        category: '',
+        category: normalizedCategory,
         address: data.address,
         description: data.description,
+        subtotal: data.subtotal,
+        discount: data.discount,
+        total: data.total,
         user_id: user.id,
         voucher_id: voucher ? voucher.id : null,
         attachments: data.attachments ? data.attachments : [],

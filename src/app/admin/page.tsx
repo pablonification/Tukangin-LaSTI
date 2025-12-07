@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { AdminLayout } from '../components/AdminLayout';
 import { StatCard } from '../components/admin/StatCard';
 import { DataTable } from '../components/admin/DataTable';
@@ -56,150 +56,32 @@ interface MessageData {
   customerData: Customer[];
 }
 
-// Mock data
-const mockStats = [
-  {
-    title: 'Total Orders',
-    value: '1,234',
-    change: '+12% from last month',
-    changeType: 'positive' as const,
-    icon: (
-      <svg
-        className='w-8 h-8'
-        fill='none'
-        stroke='currentColor'
-        viewBox='0 0 24 24'
-      >
-        <path
-          strokeLinecap='round'
-          strokeLinejoin='round'
-          strokeWidth={2}
-          d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'
-        />
-      </svg>
-    ),
-  },
-  {
-    title: 'Active Users',
-    value: '2,456',
-    change: '+8% from last month',
-    changeType: 'positive' as const,
-    icon: (
-      <svg
-        className='w-8 h-8'
-        fill='none'
-        stroke='currentColor'
-        viewBox='0 0 24 24'
-      >
-        <path
-          strokeLinecap='round'
-          strokeLinejoin='round'
-          strokeWidth={2}
-          d='M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z'
-        />
-      </svg>
-    ),
-  },
-  {
-    title: 'Revenue',
-    value: 'Rp 45.6M',
-    change: '+23% from last month',
-    changeType: 'positive' as const,
-    icon: (
-      <svg
-        className='w-8 h-8'
-        fill='none'
-        stroke='currentColor'
-        viewBox='0 0 24 24'
-      >
-        <path
-          strokeLinecap='round'
-          strokeLinejoin='round'
-          strokeWidth={2}
-          d='M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
-        />
-      </svg>
-    ),
-  },
-  {
-    title: 'Active Tukang',
-    value: '89',
-    change: '+5 from last week',
-    changeType: 'positive' as const,
-    icon: (
-      <svg
-        className='w-8 h-8'
-        fill='none'
-        stroke='currentColor'
-        viewBox='0 0 24 24'
-      >
-        <path
-          strokeLinecap='round'
-          strokeLinejoin='round'
-          strokeWidth={2}
-          d='M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4'
-        />
-      </svg>
-    ),
-  },
-];
+type DashboardStats = {
+  totalOrders: number;
+  activeUsers: number;
+  revenue: number;
+  activeTukang: number;
+};
 
-const mockRecentOrders = [
-  {
-    id: 'ORD-001',
-    customer: 'John Doe',
-    service: 'Perbaikan Kamar Mandi',
-    status: 'Pending Harga',
-    amount: 'Rp 150,000',
-    date: '2024-01-15',
-    location: 'Jakarta Selatan',
-  },
-  {
-    id: 'ORD-002',
-    customer: 'Jane Smith',
-    service: 'Instalasi AC',
-    status: 'Dikerjakan',
-    amount: 'Rp 500,000',
-    date: '2024-01-15',
-    location: 'Jakarta Pusat',
-  },
-  {
-    id: 'ORD-003',
-    customer: 'Bob Johnson',
-    service: 'Perbaikan Listrik',
-    status: 'Menunggu Pembayaran',
-    amount: 'Rp 200,000',
-    date: '2024-01-14',
-    location: 'Jakarta Barat',
-  },
-  {
-    id: 'ORD-004',
-    customer: 'Alice Brown',
-    service: 'Perbaikan Pintu',
-    status: 'Selesai',
-    amount: 'Rp 300,000',
-    date: '2024-01-14',
-    location: 'Jakarta Utara',
-  },
-  {
-    id: 'ORD-005',
-    customer: 'Charlie Wilson',
-    service: 'Perbaikan Atap',
-    status: 'Masa Tunggu',
-    amount: 'Rp 750,000',
-    date: '2024-01-13',
-    location: 'Jakarta Timur',
-  },
-];
+type RecentOrder = {
+  id: string;
+  customer: string;
+  service: string;
+  status: string;
+  amount: string;
+  date: string;
+  location: string;
+};
 
 const statusColors = {
-  'Pending Harga': 'bg-yellow-50 text-yellow-700 border border-yellow-200',
-  'Menunggu Pembayaran': 'bg-blue-50 text-blue-700 border border-blue-200',
-  Dikerjakan: 'bg-purple-50 text-purple-700 border border-purple-200',
-  'Masa Tunggu': 'bg-orange-50 text-orange-700 border border-orange-200',
-  Selesai: 'bg-green-50 text-green-700 border border-green-200',
-  Batal: 'bg-red-50 text-red-700 border border-red-200',
+  PENDING: 'bg-yellow-50 text-yellow-700 border border-yellow-200',
+  PROCESSING: 'bg-purple-50 text-purple-700 border border-purple-200',
+  WARRANTY: 'bg-orange-50 text-orange-700 border border-orange-200',
+  COMPLETED: 'bg-green-50 text-green-700 border border-green-200',
+  CANCELLED: 'bg-red-50 text-red-700 border border-red-200',
 };
+
+const formatCurrency = (value: number) => `Rp ${value.toLocaleString('id-ID')}`;
 
 // Modal IDs
 const MODAL_IDS = {
@@ -209,8 +91,54 @@ const MODAL_IDS = {
 } as const;
 
 export default function AdminDashboard() {
+  const [stats, setStats] = useState<DashboardStats>({
+    totalOrders: 0,
+    activeUsers: 0,
+    revenue: 0,
+    activeTukang: 0,
+  });
+  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
+  const [loading, setLoading] = useState(false);
   const { openModal, closeModal, isModalOpen } = useModal();
   const { showSuccess, showError } = useNotification();
+
+  useEffect(() => {
+    const fetchDashboard = async () => {
+      setLoading(true);
+      try {
+        const [statsRes, ordersRes] = await Promise.all([
+          fetch('/api/admin/stats'),
+          fetch('/api/admin/order'),
+        ]);
+
+        if (statsRes.ok) {
+          const data: DashboardStats = await statsRes.json();
+          setStats(data);
+        }
+
+        if (ordersRes.ok) {
+          const orders = await ordersRes.json();
+          setRecentOrders(
+            (orders as any[]).slice(0, 5).map((o) => ({
+              id: o.id,
+              customer: o.User?.name ?? 'Unknown',
+              service: o.service,
+              status: o.status,
+              amount: o.total ? formatCurrency(Number(o.total)) : 'Rp 0',
+              date: o.createdAt?.split('T')[0] ?? '-',
+              location: o.address ?? '-',
+            })),
+          );
+        }
+      } catch (error) {
+        console.error('Failed to load dashboard data', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboard();
+  }, []);
   const recentOrdersColumns = [
     { key: 'id', label: 'Order ID' },
     { key: 'customer', label: 'Customer' },
@@ -231,6 +159,73 @@ export default function AdminDashboard() {
     },
     { key: 'amount', label: 'Amount' },
     { key: 'date', label: 'Date' },
+  ];
+
+  const statCards = [
+    {
+      title: 'Total Orders',
+      value: stats.totalOrders.toString(),
+      change: '',
+      changeType: 'positive' as const,
+      icon: (
+        <svg className='w-8 h-8' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+          <path
+            strokeLinecap='round'
+            strokeLinejoin='round'
+            strokeWidth={2}
+            d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'
+          />
+        </svg>
+      ),
+    },
+    {
+      title: 'Active Users',
+      value: stats.activeUsers.toString(),
+      change: '',
+      changeType: 'positive' as const,
+      icon: (
+        <svg className='w-8 h-8' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+          <path
+            strokeLinecap='round'
+            strokeLinejoin='round'
+            strokeWidth={2}
+            d='M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z'
+          />
+        </svg>
+      ),
+    },
+    {
+      title: 'Revenue',
+      value: formatCurrency(stats.revenue),
+      change: '',
+      changeType: 'positive' as const,
+      icon: (
+        <svg className='w-8 h-8' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+          <path
+            strokeLinecap='round'
+            strokeLinejoin='round'
+            strokeWidth={2}
+            d='M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
+          />
+        </svg>
+      ),
+    },
+    {
+      title: 'Active Tukang',
+      value: stats.activeTukang.toString(),
+      change: '',
+      changeType: 'positive' as const,
+      icon: (
+        <svg className='w-8 h-8' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+          <path
+            strokeLinecap='round'
+            strokeLinejoin='round'
+            strokeWidth={2}
+            d='M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4'
+          />
+        </svg>
+      ),
+    },
   ];
 
   const handleCreateOrder = () => {
@@ -304,7 +299,7 @@ export default function AdminDashboard() {
 
         {/* Stats Cards */}
         <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6'>
-          {mockStats.map((stat, index) => (
+          {statCards.map((stat, index) => (
             <StatCard
               key={index}
               title={stat.title}
@@ -429,7 +424,8 @@ export default function AdminDashboard() {
             </div>
             <DataTable
               columns={recentOrdersColumns}
-              data={mockRecentOrders}
+              data={recentOrders}
+              loading={loading}
               onRowClick={(row) => console.log('Row clicked:', row)}
             />
           </div>

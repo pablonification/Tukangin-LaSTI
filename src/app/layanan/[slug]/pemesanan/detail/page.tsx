@@ -9,6 +9,7 @@ import { StickyActions } from '../../../../components/StickyActions';
 import { TopBar } from '../../../../components/TopBar';
 import { useFormStore } from '@/app/store/formStore';
 import { BaseCanvas } from '../../../../components/BaseCanvas';
+import { useNotification } from '@/app/components/NotificationProvider';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -22,6 +23,7 @@ export default function Page({ params }: PageProps) {
   const searchParams = useSearchParams();
   const { form, setForm } = useFormStore();
   const supabase = getSupabaseBrowser();
+  const { showError } = useNotification();
 
   const [nama, setNama] = useState(form.nama || '');
   const [nomor, setNomor] = useState(form.receiverPhone || ''); // Tambahan nomor hp
@@ -120,7 +122,31 @@ export default function Page({ params }: PageProps) {
   };
 
   const handleNext = () => {
-    setForm({ nama, receiverPhone: nomor, catatan: deskripsi, attachments });
+    const namaTrimmed = nama.trim();
+    const nomorTrimmed = nomor.trim();
+    const deskripsiTrimmed = deskripsi.trim();
+
+    if (!namaTrimmed) {
+      showError('Nama penerima wajib diisi');
+      return;
+    }
+
+    if (!nomorTrimmed || nomorTrimmed.length < 10) {
+      showError('Nomor telepon tidak valid (min. 10 digit)');
+      return;
+    }
+
+    if (!deskripsiTrimmed) {
+      showError('Deskripsi permasalahan wajib diisi');
+      return;
+    }
+
+    setForm({
+      nama: namaTrimmed,
+      receiverPhone: nomorTrimmed,
+      catatan: deskripsiTrimmed,
+      attachments,
+    });
     router.push('./ringkasan');
   };
 

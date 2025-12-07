@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseServer } from '@/lib/supabaseServer';
+import { adminErrorResponse, requireAdmin } from '@/lib/adminAuth';
 
 export async function GET() {
   try {
     const supabase = await getSupabaseServer();
+    await requireAdmin(supabase);
 
     // Fetch all users with their orders
     const { data: users, error: usersError } = await supabase
@@ -64,6 +66,9 @@ export async function GET() {
 
     return NextResponse.json(mapped);
   } catch (error) {
+    const adminResp = adminErrorResponse(error);
+    if (adminResp) return adminResp;
+
     console.error(error);
     return NextResponse.json(
       { error: 'Failed to fetch users' },

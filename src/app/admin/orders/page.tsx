@@ -12,12 +12,15 @@ import CompleteOrderModal from '../../components/admin/CompleteOrderModal';
 import AssignTukangModal from '../../components/admin/AssignTukangModal';
 import { useModal } from '../../components/ModalProvider';
 import { useNotification } from '@/app/components/NotificationProvider';
+import { JOB_CATEGORIES } from '@/lib/data';
 
 export interface Order {
-  id: number;
+  id: string;
   receiverName: string;
   receiverPhone: string;
   service: string;
+  category?: string;
+  priority?: string;
   address: string;
   description: string;
   status: string;
@@ -29,12 +32,12 @@ export interface Order {
   subtotal: number | null;
   discount: number | null;
   total: number | null;
-  userId: number;
-  tukangId: number | null;
+  userId: string;
+  tukangId: string | null;
   attachments: string[];
 
   User: {
-    id: number;
+    id: string;
     email: string;
     name: string;
     role: string;
@@ -43,18 +46,25 @@ export interface Order {
     isActive: boolean;
     phone?: string | null;
     joinedAt: string;
-  };
+  } | null;
 }
 
-// Mock data for orders
+type TukangOption = {
+  id: string;
+  name: string;
+  phone?: string;
+  specialization?: string;
+  rating?: number;
+  completedOrders?: number;
+  isAvailable?: boolean;
+};
 
 const statusColors = {
-  'Pending Harga': 'bg-yellow-50 text-yellow-700 border border-yellow-200',
-  'Menunggu Pembayaran': 'bg-blue-50 text-blue-700 border border-blue-200',
-  Dikerjakan: 'bg-purple-50 text-purple-700 border border-purple-200',
-  'Masa Tunggu': 'bg-orange-50 text-orange-700 border border-orange-200',
-  Selesai: 'bg-green-50 text-green-700 border border-green-200',
-  Batal: 'bg-red-50 text-red-700 border border-red-200',
+  PENDING: 'bg-yellow-50 text-yellow-700 border border-yellow-200',
+  PROCESSING: 'bg-purple-50 text-purple-700 border border-purple-200',
+  WARRANTY: 'bg-orange-50 text-orange-700 border border-orange-200',
+  COMPLETED: 'bg-green-50 text-green-700 border border-green-200',
+  CANCELLED: 'bg-red-50 text-red-700 border border-red-200',
 };
 
 const priorityColors = {
@@ -74,6 +84,8 @@ const MODAL_IDS = {
 
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [tukangOptions, setTukangOptions] = useState<TukangOption[]>([]);
   const [searchValue, setSearchValue] = useState('');
   const [filters, setFilters] = useState({
     status: 'all',
@@ -82,19 +94,51 @@ export default function AdminOrdersPage() {
     dateRange: 'all',
   });
   useEffect(() => {
-    const fetchUsers = async () => {
+    const fetchData = async () => {
+      setLoading(true);
       try {
-        const res = await fetch('/api/admin/order');
-        if (!res.ok) throw new Error('Failed to fetch users');
+        const [ordersRes, tukangRes] = await Promise.all([
+          fetch('/api/admin/order'),
+          fetch('/api/admin/tukang/available'),
+        ]);
 
-        const data: Order[] = await res.json();
-        setOrders(data);
+        if (ordersRes.ok) {
+          const data: Order[] = await ordersRes.json();
+          setOrders(data);
+        }
+
+        if (tukangRes.ok) {
+          const tukangData: Array<{
+            id: string;
+            name: string;
+            phone: string;
+            specialization: string | string[];
+            rating?: number;
+            completedOrders?: number;
+            isAvailable?: boolean;
+          }> = await tukangRes.json();
+          setTukangOptions(
+            tukangData.map((t) => ({
+              id: t.id,
+              name: t.name,
+              phone: t.phone,
+              specialization: Array.isArray(t.specialization)
+                ? t.specialization.join(', ')
+                : t.specialization,
+              rating: t.rating ?? 0,
+              completedOrders: t.completedOrders ?? 0,
+              isAvailable: t.isAvailable ?? true,
+            })),
+          );
+        }
       } catch (error) {
-        console.error('Error fetching users:', error);
+        console.error('Error fetching admin data:', error);
+      } finally {
+        setLoading(false);
       }
     };
 
-    fetchUsers();
+    fetchData();
   }, []);
   const { openModal, closeModal, isModalOpen } = useModal();
   const { showSuccess, showError } = useNotification();
@@ -108,13 +152,19 @@ export default function AdminOrdersPage() {
     const matchesSearch =
       searchValue === '' ||
       order.id.toString().toLowerCase().includes(searchValue.toLowerCase()) ||
-      order.User.name.toLowerCase().includes(searchValue.toLowerCase()) ||
+      order.User?.name?.toLowerCase().includes(searchValue.toLowerCase()) ||
       order.service.toLowerCase().includes(searchValue.toLowerCase());
 
     const matchesStatus =
       filters.status === 'all' || order.status === filters.status;
 
-    return matchesSearch && matchesStatus;
+    const matchesCategory =
+      filters.category === 'all' || order.category === filters.category;
+
+    const matchesPriority =
+      filters.priority === 'all' || order.priority === filters.priority;
+
+    return matchesSearch && matchesStatus && matchesCategory && matchesPriority;
   });
 
   const filterOptions = {
@@ -135,10 +185,7 @@ export default function AdminOrdersPage() {
       label: 'Category',
       options: [
         { value: 'all', label: 'All Categories' },
-        { value: 'Perpipaan', label: 'Perpipaan' },
-        { value: 'Kelistrikan', label: 'Kelistrikan' },
-        { value: 'AC', label: 'AC' },
-        { value: 'Konstruksi', label: 'Konstruksi' },
+        ...JOB_CATEGORIES.map((cat) => ({ value: cat, label: cat })),
       ],
       value: filters.category,
       onChange: (value: string) => handleFilterChange('category', value),
@@ -239,13 +286,23 @@ export default function AdminOrdersPage() {
           {!row.tukangId &&
             row.status !== 'Selesai' &&
             row.status !== 'Batal' && (
-              <button
-                onClick={() => handleAssignTukang(row)}
-                className='px-2 py-1 bg-purple-600 text-white text-xs rounded hover:bg-purple-700 transition-colors'
-                title='Assign tukang'
-              >
-                Assign
-              </button>
+              row.status === 'PENDING' || !row.paidAt ? (
+                <button
+                  disabled
+                  className='px-2 py-1 bg-gray-300 text-gray-500 text-xs rounded cursor-not-allowed'
+                  title='Customer must pay DP first'
+                >
+                  Assign (Needs DP)
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleAssignTukang(row)}
+                  className='px-2 py-1 bg-purple-600 text-white text-xs rounded hover:bg-purple-700 transition-colors'
+                  title='Assign tukang'
+                >
+                  Assign
+                </button>
+              )
             )}
 
           {row.tukangId && row.status === 'Dikerjakan' && (
@@ -366,9 +423,20 @@ export default function AdminOrdersPage() {
     tukangId: string,
   ) => {
     try {
-      console.log('Assigning tukang:', tukangId, 'to order:', orderId);
-      // TODO: Implement API call to assign tukang
-      // For now, just show success message
+      const res = await fetch('/api/admin/order', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: orderId, tukangId }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({} as never));
+        throw new Error(data?.error || 'Failed to assign');
+      }
+
+      const updated: Order = await res.json();
+      setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+
       showSuccess(
         `Tukang assigned successfully to order ${orderId}!`,
         'Tukang Assigned',
@@ -419,19 +487,19 @@ export default function AdminOrdersPage() {
           <div className='bg-white rounded-2xl p-6 border border-[#D4D4D4]'>
             <div className='text-b2 text-[#9E9E9E]'>Pending Price</div>
             <div className='text-sh2b text-[#141414]'>
-              {orders.filter((o) => o.status === 'Pending Harga').length}
+              {orders.filter((o) => o.status === 'PENDING').length}
             </div>
           </div>
           <div className='bg-white rounded-2xl p-6 border border-[#D4D4D4]'>
             <div className='text-b2 text-[#9E9E9E]'>In Progress</div>
             <div className='text-sh2b text-[#141414]'>
-              {orders.filter((o) => o.status === 'Dikerjakan').length}
+              {orders.filter((o) => o.status === 'PROCESSING').length}
             </div>
           </div>
           <div className='bg-white rounded-2xl p-6 border border-[#D4D4D4]'>
             <div className='text-b2 text-[#9E9E9E]'>Completed</div>
             <div className='text-sh2b text-[#141414]'>
-              {orders.filter((o) => o.status === 'Selesai').length}
+              {orders.filter((o) => o.status === 'COMPLETED').length}
             </div>
           </div>
         </div>
@@ -452,6 +520,7 @@ export default function AdminOrdersPage() {
           emptyMessage={`No orders found${
             searchValue ? ` matching "${searchValue}"` : ''
           }`}
+          loading={loading}
         />
       </div>
 
@@ -491,6 +560,7 @@ export default function AdminOrdersPage() {
         onClose={handleCloseModal}
         order={selectedOrder}
         onConfirm={handleAssignTukangConfirm}
+        tukangList={tukangOptions}
       />
     </AdminLayout>
   );

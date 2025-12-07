@@ -26,13 +26,13 @@ async function main() {
     },
   });
 
-  // Professional (mitra)
+  // Professional (mitra) - Comprehensive coverage for all job categories
   const chandra = await prisma.users.upsert({
     where: { email: "chandra@tukangin.id" },
     update: {},
     create: {
       email: "chandra@tukangin.id",
-      name: "Chandra Tukang",
+      name: "Chandra Tukang AC",
       role: "DEVELOPER",
       phone: "0812000333",
       address: "Jl. Sukajadi No. 3, Bandung",
@@ -48,6 +48,181 @@ async function main() {
       alamat: "Bandung",
       nikNumber: "3273123456780001",
       idCardPicture: "https://example.com/ktp/chandra",
+    },
+  });
+
+  // Tukang Perpipaan
+  const budi = await prisma.users.upsert({
+    where: { email: "budi@tukangin.id" },
+    update: {},
+    create: {
+      email: "budi@tukangin.id",
+      name: "Budi Tukang Pipa",
+      role: "DEVELOPER",
+      phone: "0812000444",
+      address: "Jl. Cihampelas No. 15, Bandung",
+    },
+  });
+
+  await prisma.professionals.upsert({
+    where: { userId: budi.id },
+    update: {},
+    create: {
+      userId: budi.id,
+      speciality: "Perpipaan",
+      alamat: "Bandung",
+      nikNumber: "3273123456780002",
+      idCardPicture: "https://example.com/ktp/budi",
+    },
+  });
+
+  // Tukang Kelistrikan
+  const deni = await prisma.users.upsert({
+    where: { email: "deni@tukangin.id" },
+    update: {},
+    create: {
+      email: "deni@tukangin.id",
+      name: "Deni Tukang Listrik",
+      role: "DEVELOPER",
+      phone: "0812000555",
+      address: "Jl. Pasteur No. 8, Bandung",
+    },
+  });
+
+  await prisma.professionals.upsert({
+    where: { userId: deni.id },
+    update: {},
+    create: {
+      userId: deni.id,
+      speciality: "Kelistrikan",
+      alamat: "Bandung",
+      nikNumber: "3273123456780003",
+      idCardPicture: "https://example.com/ktp/deni",
+    },
+  });
+
+  // Tukang Layanan Umum & Pemasangan
+  const eko = await prisma.users.upsert({
+    where: { email: "eko@tukangin.id" },
+    update: {},
+    create: {
+      email: "eko@tukangin.id",
+      name: "Eko Tukang Umum",
+      role: "DEVELOPER",
+      phone: "0812000666",
+      address: "Jl. Buah Batu No. 20, Bandung",
+    },
+  });
+
+  await prisma.professionals.upsert({
+    where: { userId: eko.id },
+    update: {},
+    create: {
+      userId: eko.id,
+      speciality: "Layanan Umum & Pemasangan",
+      alamat: "Bandung",
+      nikNumber: "3273123456780004",
+      idCardPicture: "https://example.com/ktp/eko",
+    },
+  });
+
+  // Tukang Konstruksi
+  const faisal = await prisma.users.upsert({
+    where: { email: "faisal@tukangin.id" },
+    update: {},
+    create: {
+      email: "faisal@tukangin.id",
+      name: "Faisal Tukang Konstruksi",
+      role: "DEVELOPER",
+      phone: "0812000777",
+      address: "Jl. Soekarno Hatta No. 100, Bandung",
+    },
+  });
+
+  await prisma.professionals.upsert({
+    where: { userId: faisal.id },
+    update: {},
+    create: {
+      userId: faisal.id,
+      speciality: "Konstruksi",
+      alamat: "Bandung",
+      nikNumber: "3273123456780005",
+      idCardPicture: "https://example.com/ktp/faisal",
+    },
+  });
+
+  // Tukang Elektronik
+  const galih = await prisma.users.upsert({
+    where: { email: "galih@tukangin.id" },
+    update: {},
+    create: {
+      email: "galih@tukangin.id",
+      name: "Galih Teknisi Elektronik",
+      role: "DEVELOPER",
+      phone: "0812000888",
+      address: "Jl. Asia Afrika No. 50, Bandung",
+    },
+  });
+
+  await prisma.professionals.upsert({
+    where: { userId: galih.id },
+    update: {},
+    create: {
+      userId: galih.id,
+      speciality: "Elektronik",
+      alamat: "Bandung",
+      nikNumber: "3273123456780006",
+      idCardPicture: "https://example.com/ktp/galih",
+    },
+  });
+
+  // Tukang Atap
+  const hendra = await prisma.users.upsert({
+    where: { email: "hendra@tukangin.id" },
+    update: {},
+    create: {
+      email: "hendra@tukangin.id",
+      name: "Hendra Tukang Atap",
+      role: "DEVELOPER",
+      phone: "0812000999",
+      address: "Jl. Dipatiukur No. 30, Bandung",
+    },
+  });
+
+  await prisma.professionals.upsert({
+    where: { userId: hendra.id },
+    update: {},
+    create: {
+      userId: hendra.id,
+      speciality: "Atap",
+      alamat: "Bandung",
+      nikNumber: "3273123456780007",
+      idCardPicture: "https://example.com/ktp/hendra",
+    },
+  });
+
+  // Tukang Cat
+  const irfan = await prisma.users.upsert({
+    where: { email: "irfan@tukangin.id" },
+    update: {},
+    create: {
+      email: "irfan@tukangin.id",
+      name: "Irfan Tukang Cat",
+      role: "DEVELOPER",
+      phone: "0812001000",
+      address: "Jl. Gatot Subroto No. 45, Bandung",
+    },
+  });
+
+  await prisma.professionals.upsert({
+    where: { userId: irfan.id },
+    update: {},
+    create: {
+      userId: irfan.id,
+      speciality: "Cat",
+      alamat: "Bandung",
+      nikNumber: "3273123456780008",
+      idCardPicture: "https://example.com/ktp/irfan",
     },
   });
 
@@ -211,7 +386,19 @@ async function main() {
   }
 
   console.log("Seeding complete:", {
-    users: { alice: alice.id, bob: bob.id, chandra: chandra.id },
+    users: { 
+      customers: { alice: alice.id, bob: bob.id },
+      professionals: { 
+        chandra: chandra.id, 
+        budi: budi.id, 
+        deni: deni.id, 
+        eko: eko.id, 
+        faisal: faisal.id, 
+        galih: galih.id, 
+        hendra: hendra.id, 
+        irfan: irfan.id 
+      }
+    },
     vouchers: { percentVoucher: percentVoucher.id, flatVoucher: flatVoucher.id, hematVoucher: hematVoucher.id },
     orders: orders.count,
     warranty: completedOrder ? "Created" : "Skipped",

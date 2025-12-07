@@ -47,6 +47,9 @@ const Page = ({ params }: PageProps) => {
           priceMax: svc.price_max,
           isFixed: svc.is_fixed,
           category: svc.category,
+          voucherCode: undefined,
+          voucherName: undefined,
+          voucherDiscount: 0,
         });
       } catch (err) {
         console.error('Failed to load service', err);

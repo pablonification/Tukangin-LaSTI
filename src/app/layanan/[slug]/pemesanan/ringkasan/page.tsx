@@ -165,11 +165,35 @@ export default function Page({ params }: PageProps) {
           <h2 className='text-sh3b text-[#141414]'>Ringkasan Pembayaran</h2>
           <div className='mt-3 rounded-2xl bg-white py-3'>
             {(() => {
-              const basePrice = form.priceMin || 0;
-              const maxPrice = form.priceMax || basePrice;
-              const discountPct = form.voucherDiscount || 0;
-              const discountedMin = basePrice - (discountPct * basePrice) / 100;
-              const discountedMax = maxPrice - (discountPct * maxPrice) / 100;
+              const basePrice = Math.abs(Number(form.priceMin)) || 0;
+              const maxPrice = Math.abs(Number(form.priceMax)) || basePrice;
+              const discountValue = Math.abs(Number(form.voucherDiscount)) || 0;
+              const rawType = (form.voucherType || '').toUpperCase();
+              const isFlat = rawType === 'FLAT' || (rawType !== 'PERCENT' && discountValue > 100);
+              const percentValue = Math.min(discountValue, 100);
+              const maxDiscountCap =
+                form.voucherMaxDiscount != null ? Math.abs(Number(form.voucherMaxDiscount)) : null;
+              const calcDiscount = (price: number) => {
+                if (!discountValue) return 0;
+                const raw = isFlat ? discountValue : (percentValue * price) / 100;
+                const capped = maxDiscountCap != null ? Math.min(raw, maxDiscountCap) : raw;
+                return Math.min(capped, price);
+              };
+              const discountMin = calcDiscount(basePrice);
+              const discountMax = calcDiscount(maxPrice);
+              const discountedMin = basePrice - discountMin;
+              const discountedMax = maxPrice - discountMax;
+
+              console.log('💰 Ringkasan Debug:', {
+                basePrice,
+                maxPrice,
+                discountValue,
+                rawType,
+                isFlat,
+                maxDiscountCap,
+                discountMin,
+                discountMax
+              });
 
               return (
                 <>
@@ -181,14 +205,16 @@ export default function Page({ params }: PageProps) {
                         : `Rp ${basePrice.toLocaleString('id-ID')} – Rp ${maxPrice.toLocaleString('id-ID')}`
                     }
                   />
-                  {discountPct > 0 && (
+                  {discountValue > 0 && (
                     <PriceRow
                       label={`Diskon Voucher${form.voucherName ? ` (${form.voucherName})` : ''}`}
-                      value={`- ${discountPct}% (Rp ${discountedMin.toLocaleString('id-ID')}${
-                        discountedMax !== discountedMin
-                          ? ` – Rp ${discountedMax.toLocaleString('id-ID')}`
+                      value={`- ${isFlat ? `Rp ${discountMin.toLocaleString('id-ID')}` : `${discountValue}% (Rp ${discountMin.toLocaleString('id-ID')})`}${
+                        discountedMax !== discountedMin && isFlat
+                          ? ` – Rp ${discountMax.toLocaleString('id-ID')}`
+                          : discountedMax !== discountedMin && !isFlat
+                          ? ` – Rp ${discountMax.toLocaleString('id-ID')}`
                           : ''
-                      })`}
+                      }`}
                       valueClassName='text-[#13BA19]'
                     />
                   )}
@@ -203,11 +229,30 @@ export default function Page({ params }: PageProps) {
 
       {/* Show total price with voucher discount */}
       {(() => {
-        const basePrice = form.priceMin || 0;
-        const maxPrice = form.priceMax || basePrice;
-        const discount = form.voucherDiscount || 0;
-        const totalMin = basePrice - (discount * basePrice) / 100;
-        const totalMax = maxPrice - (discount * maxPrice) / 100;
+        const basePrice = Math.abs(Number(form.priceMin)) || 0;
+        const maxPrice = Math.abs(Number(form.priceMax)) || basePrice;
+        const discountValue = Math.abs(Number(form.voucherDiscount)) || 0;
+        const rawType = (form.voucherType || '').toUpperCase();
+        const isFlat = rawType === 'FLAT' || (rawType !== 'PERCENT' && discountValue > 100);
+        const percentValue = Math.min(discountValue, 100);
+        const maxDiscountCap =
+          form.voucherMaxDiscount != null ? Math.abs(Number(form.voucherMaxDiscount)) : null;
+        const calcDiscount = (price: number) => {
+          if (!discountValue) return 0;
+          const raw = isFlat ? discountValue : (percentValue * price) / 100;
+          const capped = maxDiscountCap != null ? Math.min(raw, maxDiscountCap) : raw;
+          return Math.min(capped, price);
+        };
+        const totalMin = basePrice - calcDiscount(basePrice);
+        const totalMax = maxPrice - calcDiscount(maxPrice);
+        
+        console.log('💵 Total Debug:', {
+          basePrice,
+          discountValue,
+          isFlat,
+          totalMin,
+          totalMax
+        });
         const totalText =
           totalMin === totalMax
             ? `Rp ${totalMin.toLocaleString('id-ID')}`

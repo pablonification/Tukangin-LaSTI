@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { unstable_cache, revalidateTag } from 'next/cache';
 import { getSupabaseServer } from '@/lib/supabaseServer';
+import { adminErrorResponse, requireAdmin } from '@/lib/adminAuth';
 import { z, ZodError } from 'zod';
 
 const UpsertOrderRequest = z.object({
@@ -23,30 +24,60 @@ const UpsertOrderRequest = z.object({
   receiverPhone: z.string().min(1),
 });
 
+const AdminOrderUpdateSchema = z.object({
+  id: z.string().uuid(),
+  status: z
+    .enum(['PENDING', 'PROCESSING', 'COMPLETED', 'WARRANTY', 'CANCELLED'])
+    .optional(),
+  tukangId: z.string().uuid().optional(),
+  subtotal: z.number().int().optional(),
+  discount: z.number().int().optional(),
+  total: z.number().int().optional(),
+  receiverName: z.string().min(1).optional(),
+  receiverPhone: z.string().min(1).optional(),
+  description: z.string().optional(),
+});
+
+const mapOrderForUI = (row: Record<string, unknown>) => ({
+  id: row.id,
+  receiverName: row.receiver_name,
+  receiverPhone: row.receiver_phone,
+  service: row.service,
+  category: row.category,
+  address: row.address,
+  description: row.description,
+  status: row.status,
+  createdAt: row.created_at,
+  paidAt: row.paid_at,
+  startedAt: row.started_at,
+  completedAt: row.completed_at,
+  warrantyUntil: row.warranty_until ?? null,
+  subtotal: row.subtotal,
+  discount: row.discount,
+  total: row.total,
+  userId: row.user_id,
+  tukangId: row.professional_id,
+  attachments: row.attachments ?? [],
+  priority: row.priority ?? 'Normal',
+  User: row.user
+    ? {
+        id: row.user.id,
+        email: row.user.email,
+        name: row.user.name,
+        role: row.user.role,
+        image: row.user.image,
+        isNew: row.user.is_new,
+        isActive: row.user.is_active,
+        phone: row.user.phone,
+        joinedAt: row.user.joined_at,
+      }
+    : null,
+});
+
 export async function POST(req: Request) {
   try {
     const supabase = await getSupabaseServer();
-
-    // Get authenticated user
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Check user role
-    const { data: appUser, error: userError } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (userError || !appUser || appUser.role === 'CUSTOMER') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user } = await requireAdmin(supabase);
 
     const json = await req.json();
     const data = UpsertOrderRequest.parse(json);
@@ -162,6 +193,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json(order, { status: 200 });
   } catch (err) {
+    const adminResp = adminErrorResponse(err);
+    if (adminResp) return adminResp;
+
     if (err instanceof ZodError) {
       return NextResponse.json(
         { error: err.issues.map((i) => i.message).join(', ') },
@@ -179,27 +213,7 @@ export async function POST(req: Request) {
 export async function GET() {
   try {
     const supabase = await getSupabaseServer();
-
-    // Get authenticated user
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Check user role
-    const { data: appUser, error: userError } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (userError || !appUser || appUser.role === 'CUSTOMER') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    await requireAdmin(supabase);
 
     const getAdminOrders = unstable_cache(
       async () => {
@@ -209,7 +223,7 @@ export async function GET() {
           .order('created_at', { ascending: false });
 
         if (error) throw error;
-        return data;
+        return data?.map(mapOrderForUI) ?? [];
       },
       ['orders-admin-all'],
       { revalidate: 30, tags: ['orders:all'] },
@@ -219,9 +233,75 @@ export async function GET() {
 
     return NextResponse.json(orders, { status: 200 });
   } catch (err) {
+    const adminResp = adminErrorResponse(err);
+    if (adminResp) return adminResp;
+
     console.error('Error fetching orders:', err);
     return NextResponse.json(
       { error: 'Failed to fetch orders' },
+      { status: 500 },
+    );
+  }
+}
+
+export async function PATCH(req: Request) {
+  try {
+    const supabase = await getSupabaseServer();
+    await requireAdmin(supabase);
+
+    const json = await req.json();
+    const data = AdminOrderUpdateSchema.parse(json);
+
+    const updates: Record<string, unknown> = {};
+
+    if (data.tukangId) {
+      updates.professional_id = data.tukangId;
+      if (!data.status || data.status === 'PENDING') {
+        updates.status = 'PROCESSING';
+      }
+    }
+
+    if (data.status) updates.status = data.status;
+    if (data.subtotal !== undefined) updates.subtotal = data.subtotal;
+    if (data.discount !== undefined) updates.discount = data.discount;
+    if (data.total !== undefined) updates.total = data.total;
+    if (data.receiverName !== undefined) updates.receiver_name = data.receiverName;
+    if (data.receiverPhone !== undefined) updates.receiver_phone = data.receiverPhone;
+    if (data.description !== undefined) updates.description = data.description;
+
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: 'Tidak ada field yang diperbarui.' }, { status: 400 });
+    }
+
+    const { data: updated, error } = await supabase
+      .from('orders')
+      .update(updates)
+      .eq('id', data.id)
+      .select('*, user:users(*)')
+      .single();
+
+    if (error) throw error;
+
+    try {
+      revalidateTag('orders:all');
+      revalidateTag(`orders:user:${updated.user_id}`);
+    } catch {}
+
+    return NextResponse.json(mapOrderForUI(updated), { status: 200 });
+  } catch (err) {
+    const adminResp = adminErrorResponse(err);
+    if (adminResp) return adminResp;
+
+    if (err instanceof ZodError) {
+      return NextResponse.json(
+        { error: err.issues.map((i) => i.message).join(', ') },
+        { status: 400 },
+      );
+    }
+
+    console.error('Error updating order:', err);
+    return NextResponse.json(
+      { error: 'Failed to update order' },
       { status: 500 },
     );
   }

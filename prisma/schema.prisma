@@ -7,6 +7,129 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Users {
+  id           String         @id @default(uuid())
+  email        String         @unique
+  name         String
+  role         UserRole       @default(CUSTOMER)
+  image        String?
+  isNew        Boolean        @default(true) @map("is_new")
+  isActive     Boolean        @default(true) @map("is_active")
+  phone        String?
+  joinedAt     DateTime       @default(now()) @map("joined_at")
+  address      String?
+  orders       Orders[]
+  professional Professionals?
+  reviews      Reviews[]
+  suspensions  Suspensions[]
+  warranties   Warranties[]
+
+  @@map("users")
+}
+
+model Suspensions {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  reason    String
+  until     DateTime?
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      Users     @relation(fields: [userId], references: [id])
+
+  @@map("suspensions")
+}
+
+model Orders {
+  id             String         @id @default(dbgenerated("gen_random_uuid()"))
+  receiverName   String         @map("receiver_name")
+  receiverPhone  String         @map("receiver_phone")
+  category       String
+  service        String
+  address        String
+  description    String
+  status         OrderStatus    @default(PENDING)
+  createdAt      DateTime       @default(now()) @map("created_at")
+  paidAt         DateTime?      @map("paid_at")
+  startedAt      DateTime?      @map("started_at")
+  completedAt    DateTime?      @map("completed_at")
+  subtotal       Int?
+  discount       Int?
+  total          Int?
+  userId         String         @map("user_id")
+  voucherId      Int?           @map("voucher_id")
+  professionalId String?        @map("professional_id")
+  rating         Decimal?
+  attachments    String[]
+  professional   Professionals? @relation(fields: [professionalId], references: [userId])
+  user           Users          @relation(fields: [userId], references: [id])
+  voucher        Vouchers?      @relation(fields: [voucherId], references: [id])
+  reviews        Reviews[]
+  warranties     Warranties[]
+
+  @@map("orders")
+}
+
+model Professionals {
+  userId        String       @id @map("user_id")
+  speciality    String?
+  alamat        String
+  nikNumber     String       @unique @map("nik_number")
+  idCardPicture String       @map("id_card_picture")
+  joined_at     DateTime     @default(now())
+  orders        Orders[]
+  user          Users        @relation(fields: [userId], references: [id])
+  reviews       Reviews[]
+  warranties    Warranties[]
+
+  @@map("professionals")
+}
+
+model Vouchers {
+  id          Int          @id @default(autoincrement())
+  code        String       @unique
+  type        DiscountType
+  value       Decimal
+  maxDiscount Decimal      @map("max_discount")
+  expiryDate  DateTime?    @map("expiry_date")
+  usageLimit  Int?         @map("usage_limit")
+  isActive    Boolean      @map("is_active")
+  orders      Orders[]
+
+  @@map("vouchers")
+}
+
+model Warranties {
+  id             String         @id @default(dbgenerated("gen_random_uuid()"))
+  orderId        String         @map("order_id")
+  userId         String         @map("user_id")
+  professionalId String?        @map("professional_id")
+  status         String         @default("ACTIVE")
+  coverageType   String         @default("Standard Service Warranty") @map("coverage_type")
+  validUntil     DateTime       @map("valid_until")
+  terms          String
+  createdAt      DateTime       @default(now()) @map("created_at")
+  order          Orders         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  professional   Professionals? @relation(fields: [professionalId], references: [userId])
+  user           Users          @relation(fields: [userId], references: [id])
+
+  @@map("warranties")
+}
+
+model Reviews {
+  id             String        @id @default(dbgenerated("gen_random_uuid()"))
+  orderId        String        @map("order_id")
+  userId         String        @map("user_id")
+  professionalId String        @map("professional_id")
+  rating         Int
+  comment        String?
+  tags           String[]
+  createdAt      DateTime      @default(now()) @map("created_at")
+  order          Orders        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  professional   Professionals @relation(fields: [professionalId], references: [userId])
+  user           Users         @relation(fields: [userId], references: [id])
+
+  @@map("reviews")
+}
+
 enum OrderStatus {
   PENDING
   PROCESSING
@@ -22,143 +145,6 @@ enum DiscountType {
 
 enum UserRole {
   CUSTOMER
-  DEVELOPER
   ADMIN
-}
-
-model Users {
-  id       String   @id @default(uuid())
-  email    String   @unique
-  name     String
-  role     UserRole @default(CUSTOMER)
-  image    String?
-  isNew    Boolean  @default(true) @map("is_new")
-  isActive Boolean  @default(true) @map("is_active")
-  phone    String?
-  joinedAt DateTime @default(now()) @map("joined_at")
-  address  String?
-
-  // Relations
-  suspensions  Suspensions[]
-  orders       Orders[]
-  professional Professionals?
-  warranties   Warranties[]
-  reviews      Reviews[]
-
-  @@map("users")
-}
-
-model Suspensions {
-  id        String    @id @default(uuid())
-  userId    String    @map("user_id")
-  reason    String
-  until     DateTime?
-  createdAt DateTime  @default(now()) @map("created_at")
-
-  // Relations
-  user Users @relation(fields: [userId], references: [id])
-
-  @@map("suspensions")
-}
-
-model Orders {
-  id             String      @id @default(uuid())
-  receiverName   String      @map("receiver_name")
-  receiverPhone  String      @map("receiver_phone")
-  category       String
-  service        String
-  address        String
-  description    String
-  status         OrderStatus @default(PENDING)
-  createdAt      DateTime    @default(now()) @map("created_at")
-  paidAt         DateTime?   @map("paid_at")
-  startedAt      DateTime?   @map("started_at")
-  completedAt    DateTime?   @map("completed_at")
-  subtotal       Int?
-  discount       Int?
-  total          Int?
-  userId         String      @map("user_id")
-  voucherId      Int?        @map("voucher_id")
-  professionalId String?     @map("professional_id")
-  rating         Decimal?
-
-  // Relations
-  user         Users          @relation(fields: [userId], references: [id])
-  voucher      Vouchers?      @relation(fields: [voucherId], references: [id])
-  professional Professionals? @relation(fields: [professionalId], references: [userId])
-  attachments  String[]
-  warranties   Warranties[]
-  reviews      Reviews[]
-
-  @@map("orders")
-}
-
-model Professionals {
-  userId        String   @id @map("user_id")
-  speciality    String?
-  alamat        String
-  nikNumber     String   @unique @map("nik_number")
-  idCardPicture String   @map("id_card_picture")
-  joined_at     DateTime @default(now())
-
-  // Relations
-  user       Users        @relation(fields: [userId], references: [id])
-  orders     Orders[]
-  warranties Warranties[]
-  reviews    Reviews[]
-
-  @@map("professionals")
-}
-
-model Vouchers {
-  id          Int          @id @default(autoincrement())
-  code        String       @unique
-  type        DiscountType
-  value       Decimal
-  maxDiscount Decimal      @map("max_discount")
-  expiryDate  DateTime?    @map("expiry_date")
-  usageLimit  Int?         @map("usage_limit")
-  isActive    Boolean      @map("is_active")
-
-  // Relations
-  orders Orders[]
-
-  @@map("vouchers")
-}
-
-model Warranties {
-  id             String   @id @default(uuid())
-  orderId        String   @map("order_id")
-  userId         String   @map("user_id")
-  professionalId String?  @map("professional_id")
-  status         String   @default("ACTIVE")
-  coverageType   String   @default("Standard Service Warranty") @map("coverage_type")
-  validUntil     DateTime @map("valid_until")
-  terms          String
-  createdAt      DateTime @default(now()) @map("created_at")
-
-  // Relations
-  order        Orders         @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  user         Users          @relation(fields: [userId], references: [id])
-  professional Professionals? @relation(fields: [professionalId], references: [userId])
-
-  @@map("warranties")
-}
-
-model Reviews {
-  id             String   @id @default(uuid())
-  orderId        String   @map("order_id")
-  userId         String   @map("user_id")
-  professionalId String   @map("professional_id")
-  rating         Int      // Validation: 1-5 (enforced at application level)
-  comment        String?
-  tags           String[]
-  createdAt      DateTime @default(now()) @map("created_at")
-
-  // Relations
-  order        Orders        @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  user         Users         @relation(fields: [userId], references: [id])
-  professional Professionals @relation(fields: [professionalId], references: [userId])
-
-  @@map("reviews")
+  DEVELOPER
 }

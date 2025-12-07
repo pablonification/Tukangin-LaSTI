@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState } from 'react';
+import { use, useCallback, useEffect, useState } from 'react';
 import Image from 'next/image';
 import { TopBar } from '@/app/components/TopBar';
 import { BaseCanvas } from '@/app/components/BaseCanvas';
@@ -39,10 +39,11 @@ const Page = ({ params }: PageProps) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchOrder = async () => {
+  const fetchOrder = useCallback(
+    async (showSpinner = false) => {
+      if (showSpinner) setLoading(true);
       try {
-        const res = await fetch(`/api/order/${id}`);
+        const res = await fetch(`/api/order/${id}`, { cache: 'no-store' });
         const data = await res.json();
         if (!res.ok) {
           setError(data?.error || 'Gagal memuat pesanan');
@@ -53,36 +54,45 @@ const Page = ({ params }: PageProps) => {
         console.error(err);
         setError('Gagal memuat pesanan');
       } finally {
-        setLoading(false);
+        if (showSpinner) setLoading(false);
       }
-    };
+    },
+    [id],
+  );
 
-    const fetchProfessional = async () => {
-      try {
-        const res = await fetch(`/api/order/${id}/professional`);
-        const data = await res.json();
-        if (data?.success) setProfessional(data.data.mitra);
-      } catch (err) {
-        console.error(err);
-      }
-    };
+  const fetchProfessional = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/order/${id}/professional`, { cache: 'no-store' });
+      const data = await res.json();
+      if (data?.success) setProfessional(data.data.mitra);
+    } catch (err) {
+      console.error(err);
+    }
+  }, [id]);
 
-    const fetchTracking = async () => {
-      try {
-        const res = await fetch(`/api/tracking/${id}`);
-        const data = await res.json();
-        if (data?.success) setTracking(data.data);
-      } catch (err) {
-        console.error(err);
-      }
-    };
+  const fetchTracking = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/tracking/${id}`, { cache: 'no-store' });
+      const data = await res.json();
+      if (data?.success) setTracking(data.data);
+    } catch (err) {
+      console.error(err);
+    }
+  }, [id]);
 
-    fetchOrder();
+  useEffect(() => {
+    fetchOrder(true);
     fetchProfessional();
     fetchTracking();
-    const interval = setInterval(fetchTracking, 5000);
+
+    const interval = setInterval(() => {
+      fetchOrder(false);
+      fetchProfessional();
+      fetchTracking();
+    }, 5000);
+
     return () => clearInterval(interval);
-  }, [id]);
+  }, [fetchOrder, fetchProfessional, fetchTracking]);
 
   if (loading) {
     return (

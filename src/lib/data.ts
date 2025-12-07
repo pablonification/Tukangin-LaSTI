@@ -3,20 +3,29 @@ export interface ServiceAddOn {
   price: number;
 }
 
+export const JOB_CATEGORIES = [
+  'Perpipaan',
+  'Kelistrikan',
+  'AC',
+  'Layanan Umum & Pemasangan',
+  'Konstruksi',
+  'Elektronik',
+  'Atap',
+  'Cat',
+] as const;
+
+export type JobCategory = (typeof JOB_CATEGORIES)[number];
+
 export interface ServiceItem {
   slug: string;
   name: string;
-  category: string;
+  category: JobCategory;
   price: number;
   description: string;
   addOns?: ServiceAddOn[];
 }
 
-export const categories = [
-  'Perpipaan',
-  'Kelistrikan',
-  'Layanan Umum & Pemasangan',
-] as const;
+export const categories = JOB_CATEGORIES;
 
 export const services: ServiceItem[] = [
   {
