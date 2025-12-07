@@ -178,7 +178,7 @@ The following Plan scenarios require E2E/UI testing (Playwright/Cypress):
 ```typescript
 // 🔒 SECURITY CHECK: Suspension
 const { data: userProfile } = await supabase
-  .from('users')
+  .from('Users')
   .select('is_active')
   .eq('id', user.id)
   .single();

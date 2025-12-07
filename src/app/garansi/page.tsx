@@ -25,7 +25,7 @@ export default async function WarrantyPage() {
   };
 
   const { data: warranties } = await supabase
-    .from('warranties')
+    .from('Warranties')
     .select(`id, status, valid_until, terms, order:orders(service)`, { count: 'exact' })
     .eq('user_id', user.id)
     .order('created_at', { ascending: false });

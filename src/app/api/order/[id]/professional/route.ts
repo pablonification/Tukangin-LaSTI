@@ -17,7 +17,7 @@ export async function GET(
 
     // Query joins: Order -> Professional -> User (for name/photo)
     const { data: order, error } = await supabase
-      .from('orders')
+      .from('Orders')
       .select(`
         id,
         status,

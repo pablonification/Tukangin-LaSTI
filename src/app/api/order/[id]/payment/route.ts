@@ -18,7 +18,7 @@ export async function POST(
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { data: userProfile } = await supabase
-      .from('users')
+      .from('Users')
       .select('is_active')
       .eq('id', user.id)
       .single();
@@ -33,7 +33,7 @@ export async function POST(
 
     // 1. Verify Order & DP Amount
     const { data: order, error: fetchError } = await supabase
-      .from('orders')
+      .from('Orders')
       .select('total, status')
       .eq('id', id)
       .eq('user_id', user.id)
@@ -51,7 +51,7 @@ export async function POST(
 
     // 3. Update Status to SEARCHING_DRIVER (Report 4.1.c)
     const { error: updateError } = await supabase
-      .from('orders')
+      .from('Orders')
       .update({ 
         status: 'PROCESSING', 
         paid_at: new Date().toISOString() 

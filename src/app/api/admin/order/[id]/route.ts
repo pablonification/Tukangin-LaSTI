@@ -25,7 +25,7 @@ export async function DELETE(
 
     // Check user role
     const { data: appUser, error: userError } = await supabase
-      .from('users')
+      .from('Users')
       .select('role')
       .eq('id', user.id)
       .single();
@@ -38,7 +38,7 @@ export async function DELETE(
     const data = DeleteOrderSchema.parse(resolvedParams);
 
     const { data: deleted, error } = await supabase
-      .from('orders')
+      .from('Orders')
       .delete()
       .eq('id', data.id)
       .select('*')

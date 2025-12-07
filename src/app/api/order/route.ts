@@ -98,8 +98,8 @@ export async function POST(req: Request) {
 
     // Invalidate cached lists for this user and admin views
     try {
-      revalidateTag(`orders:user:${user.id}`);
-      revalidateTag('orders:all');
+      revalidateTag(`Orders:user:${user.id}`);
+      revalidateTag('Orders:all');
       // Voucher usage might have changed
       revalidateTag('voucher:all');
     } catch {}
@@ -144,8 +144,8 @@ export async function GET() {
         if (error) throw error;
         return data;
       },
-      [`orders-user-${user.id}`],
-      { revalidate: 60, tags: [`orders:user:${user.id}`] },
+      [`Orders-user-${user.id}`],
+      { revalidate: 60, tags: [`Orders:user:${user.id}`] },
     );
 
     const orders = await getUserOrders();

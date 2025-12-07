@@ -32,10 +32,10 @@ model Users {
   name     String
   role     UserRole @default(CUSTOMER)
   image    String?
-  isNew    Boolean  @default(true)
-  isActive Boolean  @default(true)
+  isNew    Boolean  @default(true) @map("is_new")
+  isActive Boolean  @default(true) @map("is_active")
   phone    String?
-  joinedAt DateTime @default(now())
+  joinedAt DateTime @default(now()) @map("joined_at")
   address  String?
 
   // Relations
@@ -44,38 +44,42 @@ model Users {
   professional Professionals?
   warranties   Warranties[]
   reviews      Reviews[]
+
+  @@map("users")
 }
 
 model Suspensions {
   id        String    @id @default(uuid())
-  userId    String
+  userId    String    @map("user_id")
   reason    String
   until     DateTime?
-  createdAt DateTime  @default(now())
+  createdAt DateTime  @default(now()) @map("created_at")
 
   // Relations
   user Users @relation(fields: [userId], references: [id])
+
+  @@map("suspensions")
 }
 
 model Orders {
   id             String      @id @default(uuid())
-  receiverName   String
-  receiverPhone  String
+  receiverName   String      @map("receiver_name")
+  receiverPhone  String      @map("receiver_phone")
   category       String
   service        String
   address        String
   description    String
   status         OrderStatus @default(PENDING)
-  createdAt      DateTime    @default(now())
-  paidAt         DateTime?
-  startedAt      DateTime?
-  completedAt    DateTime?
+  createdAt      DateTime    @default(now()) @map("created_at")
+  paidAt         DateTime?   @map("paid_at")
+  startedAt      DateTime?   @map("started_at")
+  completedAt    DateTime?   @map("completed_at")
   subtotal       Int?
   discount       Int?
   total          Int?
-  userId         String
-  voucherId      Int?
-  professionalId String?
+  userId         String      @map("user_id")
+  voucherId      Int?        @map("voucher_id")
+  professionalId String?     @map("professional_id")
   rating         Decimal?
 
   // Relations
@@ -85,14 +89,16 @@ model Orders {
   attachments  String[]
   warranties   Warranties[]
   reviews      Reviews[]
+
+  @@map("orders")
 }
 
 model Professionals {
-  userId        String   @id
+  userId        String   @id @map("user_id")
   speciality    String?
   alamat        String
-  nikNumber     String   @unique
-  idCardPicture String
+  nikNumber     String   @unique @map("nik_number")
+  idCardPicture String   @map("id_card_picture")
   joined_at     DateTime @default(now())
 
   // Relations
@@ -100,6 +106,8 @@ model Professionals {
   orders     Orders[]
   warranties Warranties[]
   reviews    Reviews[]
+
+  @@map("professionals")
 }
 
 model Vouchers {
@@ -107,44 +115,50 @@ model Vouchers {
   code        String       @unique
   type        DiscountType
   value       Decimal
-  maxDiscount Decimal
-  expiryDate  DateTime?
-  usageLimit  Int?
-  isActive    Boolean
+  maxDiscount Decimal      @map("max_discount")
+  expiryDate  DateTime?    @map("expiry_date")
+  usageLimit  Int?         @map("usage_limit")
+  isActive    Boolean      @map("is_active")
 
   // Relations
   orders Orders[]
+
+  @@map("vouchers")
 }
 
 model Warranties {
   id             String   @id @default(uuid())
-  orderId        String
-  userId         String
-  professionalId String?
+  orderId        String   @map("order_id")
+  userId         String   @map("user_id")
+  professionalId String?  @map("professional_id")
   status         String   @default("ACTIVE")
-  coverageType   String   @default("Standard Service Warranty")
-  validUntil     DateTime
+  coverageType   String   @default("Standard Service Warranty") @map("coverage_type")
+  validUntil     DateTime @map("valid_until")
   terms          String
-  createdAt      DateTime @default(now())
+  createdAt      DateTime @default(now()) @map("created_at")
 
   // Relations
   order        Orders         @relation(fields: [orderId], references: [id], onDelete: Cascade)
   user         Users          @relation(fields: [userId], references: [id])
   professional Professionals? @relation(fields: [professionalId], references: [userId])
+
+  @@map("warranties")
 }
 
 model Reviews {
   id             String   @id @default(uuid())
-  orderId        String
-  userId         String
-  professionalId String
+  orderId        String   @map("order_id")
+  userId         String   @map("user_id")
+  professionalId String   @map("professional_id")
   rating         Int      // Validation: 1-5 (enforced at application level)
   comment        String?
   tags           String[]
-  createdAt      DateTime @default(now())
+  createdAt      DateTime @default(now()) @map("created_at")
 
   // Relations
   order        Orders        @relation(fields: [orderId], references: [id], onDelete: Cascade)
   user         Users         @relation(fields: [userId], references: [id])
   professional Professionals @relation(fields: [professionalId], references: [userId])
+
+  @@map("reviews")
 }

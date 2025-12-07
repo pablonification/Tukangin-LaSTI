@@ -40,7 +40,7 @@ export async function GET(
     const getOrder = unstable_cache(
       async () => {
         const { data, error } = await supabase
-          .from('orders')
+          .from('Orders')
           .select('*')
           .eq('id', id)
           .eq('user_id', user.id)
@@ -89,7 +89,7 @@ export async function POST(req: Request) {
 
     // 2. Insert Order with 'WAITING_DP' status
     const { data: order, error } = await supabase
-      .from('orders')
+      .from('Orders')
       .insert({
         user_id: user.id,
         receiver_name: data.receiverName,
@@ -148,7 +148,7 @@ export async function PATCH(
     }
 
     const { data: updatedOrder, error } = await supabase
-      .from('orders')
+      .from('Orders')
       .update({
         status: 'COMPLETED',
         completed_at: new Date().toISOString()
@@ -164,7 +164,7 @@ export async function PATCH(
     const warrantyExpiry = new Date();
     warrantyExpiry.setDate(warrantyExpiry.getDate() + 30); // 30 Days Warranty
 
-    await supabase.from('warranties').insert({
+    await supabase.from('Warranties').insert({
       order_id: id,
       user_id: user.id,
       professional_id: updatedOrder.professional_id,

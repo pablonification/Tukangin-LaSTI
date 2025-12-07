@@ -1,12 +1,12 @@
 import Image from 'next/image';
 import Link from 'next/link';
-import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
 import { BottomNav } from '@/app/components/BottomNav';
 import { BaseCanvas } from '@/app/components/BaseCanvas';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import LogoutButton from '../components/LogoutButton';
+import { cookies } from 'next/headers';
+import { createServerClient } from '@supabase/ssr';
 
 export const metadata: Metadata = {
   title: 'Profil Anda',
@@ -14,8 +14,31 @@ export const metadata: Metadata = {
 };
 
 export default async function ProfilePage() {
-  const session = await getServerSession(authOptions);
-  const userId = session?.user?.id;
+  const cookieStore = await cookies();
+  
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            );
+          } catch {
+            // Server Component - handled by middleware
+          }
+        },
+      },
+    }
+  );
+
+  const { data: { user: supabaseUser } } = await supabase.auth.getUser();
+  const userId = supabaseUser?.id;
 
   const user = userId
     ? await prisma.users.findUnique({

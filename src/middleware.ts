@@ -2,88 +2,89 @@ import { NextResponse, NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
 export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  
-  console.log('Middleware called for:', pathname);
-  console.log('Cookies:', request.cookies.getAll().map(c => c.name));
-  
-  // Create a response object that we can modify
+  // 1. Initialize the response ONCE
   let response = NextResponse.next({
     request: {
       headers: request.headers,
     },
   });
 
-  // Create Supabase client with cookie handling
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
-          const value = request.cookies.get(name)?.value;
-          console.log('Getting cookie:', name, value ? 'EXISTS' : 'NOT FOUND');
-          return value;
+        // Use getAll to retrieve all cookies from the request
+        getAll() {
+          return request.cookies.getAll();
         },
-        set(name: string, value: string, options: Record<string, unknown>) {
-          request.cookies.set({
-            name,
-            value,
-            ...options,
-          });
+        // Use setAll to handle setting/deleting multiple cookies at once
+        setAll(cookiesToSet) {
+          // 1. Update the request cookies (so the current request sees the new session)
+          cookiesToSet.forEach(({ name, value, options }) => 
+            request.cookies.set(name, value)
+          );
+
+          // 2. Re-create the response to include the updated request cookies
           response = NextResponse.next({
             request: {
               headers: request.headers,
             },
           });
-          response.cookies.set({
-            name,
-            value,
-            ...options,
-          });
-        },
-        remove(name: string, options: Record<string, unknown>) {
-          request.cookies.set({
-            name,
-            value: '',
-            ...options,
-          });
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          });
-          response.cookies.set({
-            name,
-            value: '',
-            ...options,
-          });
+
+          // 3. Set the actual Set-Cookie headers on the response object
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options)
+          );
         },
       },
     }
   );
 
-  // Get user from Supabase auth
+  // 2. Refresh the session (this triggers the cookie updates above)
   const {
     data: { user },
-    error,
   } = await supabase.auth.getUser();
 
-  console.log('Middleware user:', user?.id, 'error:', error?.message);
+  // 3. Protected Route Logic
+  const { pathname } = request.nextUrl;
+  
+  // Define routes that do NOT require authentication
+  const isPublicRoute = 
+    pathname === '/' || 
+    pathname === '/welcome' || 
+    pathname === '/auth/callback' || 
+    pathname === '/otp' ||
+    pathname === '/login' ||
+    pathname.startsWith('/api/') || // Allow APIs to handle their own 401s
+    pathname.startsWith('/_next') ||
+    pathname.includes('favicon.ico');
 
-  // Redirect to login if no user and not on public routes
-  if (
-    pathname !== '/' &&
-    pathname !== '/welcome' &&
-    pathname !== '/auth/callback' &&
-    !user
-  ) {
-    return NextResponse.redirect(new URL('/', request.url));
+  // Redirect unauthenticated users to Login
+  if (!user && !isPublicRoute) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/';
+    return NextResponse.redirect(url);
+  }
+
+  // Redirect authenticated users away from public pages (Login/Welcome) to Home
+  if (user && (pathname === '/' || pathname === '/welcome' || pathname === '/login')) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/home';
+    return NextResponse.redirect(url);
   }
 
   return response;
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)'],
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
 };

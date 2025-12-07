@@ -12,7 +12,7 @@ export async function GET(
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { data: userProfile } = await supabase
-      .from('users')
+      .from('Users')
       .select('is_active')
       .eq('id', user.id)
       .single();
@@ -25,7 +25,7 @@ export async function GET(
 
     // Verify order ownership
     const { data: order } = await supabase
-      .from('orders')
+      .from('Orders')
       .select('status')
       .eq('id', id)
       .eq('user_id', user.id)

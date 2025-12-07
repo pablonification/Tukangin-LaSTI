@@ -16,7 +16,7 @@ export default async function Home() {
   // const getUserIsNew = unstable_cache(
   //   async () => {
   //     const { data } = await supabase
-  //       .from('users')
+  //       .from('Users')
   //       .select('is_new')
   //       .eq('id', user.id)
   //       .single();
