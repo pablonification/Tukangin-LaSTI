@@ -73,6 +73,16 @@ type RecentOrder = {
   location: string;
 };
 
+interface OrderApiResponse {
+  id: string;
+  User?: { name?: string };
+  service: string;
+  status: string;
+  total?: number;
+  createdAt?: string;
+  address?: string;
+}
+
 const statusColors = {
   PENDING: 'bg-yellow-50 text-yellow-700 border border-yellow-200',
   PROCESSING: 'bg-purple-50 text-purple-700 border border-purple-200',
@@ -119,7 +129,7 @@ export default function AdminDashboard() {
         if (ordersRes.ok) {
           const orders = await ordersRes.json();
           setRecentOrders(
-            (orders as any[]).slice(0, 5).map((o) => ({
+            (orders as OrderApiResponse[]).slice(0, 5).map((o) => ({
               id: o.id,
               customer: o.User?.name ?? 'Unknown',
               service: o.service,

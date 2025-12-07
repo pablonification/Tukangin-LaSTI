@@ -137,7 +137,7 @@ const BroadcastOrderModal = ({
                         {order.service}
                       </p>
                       <p className='text-b3 text-[#9E9E9E] mb-2'>
-                        {order.User.name}
+                        {order.User?.name || 'Unknown'}
                       </p>
                       <p className='text-b3 text-[#9E9E9E]'>{order.address}</p>
                       {order.total ? (

@@ -1,6 +1,19 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseServer } from '@/lib/supabaseServer';
 
+interface ProfessionalDbRow {
+  user_id: string;
+  speciality: string;
+  user?: {
+    name: string;
+    image: string | null;
+  } | null;
+  users?: {
+    name: string;
+    image: string | null;
+  } | null;
+}
+
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -47,15 +60,16 @@ export async function GET(
       );
     }
 
-    const name = professional.user?.name || professional.users?.name || 'Mitra Tukang';
-    const image = professional.user?.image || professional.users?.image;
+    const typedProfessional = professional as unknown as ProfessionalDbRow;
+    const name = typedProfessional.user?.name || typedProfessional.users?.name || 'Mitra Tukang';
+    const image = typedProfessional.user?.image || typedProfessional.users?.image;
 
     const responseData = {
       success: true,
       data: {
         order_id: order.id,
         mitra: {
-          id: professional.user_id,
+          id: typedProfessional.user_id,
           name,
           rating: 4.8,
           total_jobs: 150,

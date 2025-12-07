@@ -254,7 +254,6 @@ const AssignTukangModal = ({
             onClick={handleConfirm}
             disabled={!selectedTukangId || isLoading || !isDpPaid}
             className='bg-[#0082C9] text-white hover:bg-[#0066A3] disabled:opacity-50 disabled:cursor-not-allowed'
-            title={!isDpPaid ? 'Cannot assign: DP payment required' : ''}
           >
             {isLoading ? 'Assigning...' : !isDpPaid ? 'Assign (DP Required)' : 'Assign Tukang'}
           </Button>

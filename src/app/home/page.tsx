@@ -23,6 +23,14 @@ type RecentOrder = {
   total?: number | null;
 };
 
+interface OrderApiResponse {
+  id: string;
+  service: string;
+  created_at: string;
+  status: string;
+  total?: number;
+}
+
 const Page = () => {
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -54,7 +62,7 @@ const Page = () => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         const normalized: RecentOrder[] = Array.isArray(data)
-          ? data.slice(0, 5).map((o: any) => ({
+          ? data.slice(0, 5).map((o: OrderApiResponse) => ({
               id: o.id,
               service: o.service,
               created_at: o.created_at,

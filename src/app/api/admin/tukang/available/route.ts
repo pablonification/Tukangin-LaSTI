@@ -23,9 +23,22 @@ const normalizeCategory = (value?: string | null) => {
   return synonyms[lowered] ?? null;
 };
 
-export async function GET(request?: Request) {
+interface ProfessionalDbRow {
+  user_id: string;
+  speciality: string;
+  user: {
+    id: string;
+    name: string;
+    phone: string | null;
+    email: string;
+    role: string;
+    is_active: boolean;
+  } | null;
+}
+
+export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request?.url ?? 'http://localhost');
+    const { searchParams } = new URL(request.url);
     const requestedCategory = normalizeCategory(searchParams.get('category'));
 
     const supabase = await getSupabaseServer();
@@ -36,12 +49,14 @@ export async function GET(request?: Request) {
       .select('user_id, speciality, user:users(id, name, phone, email, role, is_active)');
 
     if (prosError) throw prosError;
+    
+    const typedProfessionals = professionals as unknown as ProfessionalDbRow[];
 
     const { data: reviews } = await supabase
       .from('reviews')
       .select('professional_id, rating');
 
-    const available = (professionals ?? [])
+    const available = (typedProfessionals ?? [])
       .filter((pro) => pro.user && pro.user.is_active && ['DEVELOPER', 'ADMIN', 'TUKANG'].includes(pro.user.role))
       .map((pro) => {
         const professionalReviews = (reviews ?? []).filter(

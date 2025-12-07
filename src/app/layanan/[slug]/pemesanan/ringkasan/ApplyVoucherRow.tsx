@@ -36,7 +36,7 @@ export const ApplyVoucherRow = () => {
           voucherName: data.code || code,
           voucherDiscount: Number(data.discount_value) || 0,
           voucherType: (data.discount_type || 'FLAT').toUpperCase(),
-          voucherMaxDiscount: data.max_discount != null ? Number(data.max_discount) : null,
+          voucherMaxDiscount: data.max_discount != null ? Number(data.max_discount) : undefined,
         });
         setOpen(false);
       } else {

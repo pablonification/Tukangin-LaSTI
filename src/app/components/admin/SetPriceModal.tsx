@@ -63,7 +63,7 @@ const SetPriceModal = ({
             </div>
             <div className='flex justify-between'>
               <span className='text-b3 text-[#9E9E9E]'>Customer:</span>
-              <span className='text-b2 text-[#141414]'>{order.User.name}</span>
+              <span className='text-b2 text-[#141414]'>{order.User?.name || 'Unknown'}</span>
             </div>
             <div className='flex justify-between'>
               <span className='text-b3 text-[#9E9E9E]'>Estimated Price:</span>

@@ -38,7 +38,41 @@ const AdminOrderUpdateSchema = z.object({
   description: z.string().optional(),
 });
 
-const mapOrderForUI = (row: Record<string, unknown>) => ({
+interface OrderDbRow {
+  id: string;
+  receiver_name: string;
+  receiver_phone: string;
+  service: string;
+  category?: string;
+  address: string;
+  description: string;
+  status: string;
+  created_at: string;
+  paid_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  warranty_until?: string | null;
+  subtotal: number | null;
+  discount: number | null;
+  total: number | null;
+  user_id: string;
+  professional_id: string | null;
+  attachments?: string[] | null;
+  priority?: string;
+  user?: {
+    id: string;
+    email: string;
+    name: string;
+    role: string;
+    image?: string | null;
+    is_new: boolean;
+    is_active: boolean;
+    phone?: string | null;
+    joined_at: string;
+  } | null;
+}
+
+const mapOrderForUI = (row: OrderDbRow) => ({
   id: row.id,
   receiverName: row.receiver_name,
   receiverPhone: row.receiver_phone,

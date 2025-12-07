@@ -52,11 +52,11 @@ export interface Order {
 type TukangOption = {
   id: string;
   name: string;
-  phone?: string;
-  specialization?: string;
-  rating?: number;
-  completedOrders?: number;
-  isAvailable?: boolean;
+  phone: string;
+  specialization: string;
+  rating: number;
+  completedOrders: number;
+  isAvailable: boolean;
 };
 
 const statusColors = {
